@@ -12,6 +12,7 @@ function createHarness(mode) {
     clientCreations: 0,
     createdDatabases: [],
     droppedDatabases: [],
+    dropDatabaseAttempts: 0,
     terminateConnectionAttempts: 0,
     fixtureQueries: [],
     fixtureEnded: false,
@@ -54,6 +55,10 @@ function createHarness(mode) {
         }
         const drop = sql.match(/^DROP DATABASE "([^"]+)"$/);
         if (drop) {
+          state.dropDatabaseAttempts += 1;
+          if (mode === "drop-database") {
+            throw new Error("simulated database drop failure");
+          }
           state.droppedDatabases.push(drop[1]);
           return { rows: [] };
         }
@@ -170,6 +175,18 @@ test("temporary files are removed when terminating database connections fails", 
 
   assert.equal(harness.state.terminateConnectionAttempts, 1);
   await assertResourcesRemoved(harness.state);
+});
+
+test("administrative connection and temporary files are cleaned when dropping the database fails", async () => {
+  const harness = createHarness("drop-database");
+
+  await assert.rejects(runWith(harness), /simulated database drop failure/);
+
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the generated database drop was attempted");
+  assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("a fixture connection to another database is rejected before fixture SQL runs", async () => {
