@@ -11,8 +11,10 @@ function createHarness(mode) {
   const state = {
     createdDatabases: [],
     droppedDatabases: [],
+    terminateConnectionAttempts: 0,
     fixtureQueries: [],
     fixtureEnded: false,
+    adminEnded: false,
     runTestProcess: false,
     tempDirectories: [],
   };
@@ -33,6 +35,13 @@ function createHarness(mode) {
         const create = sql.match(/^CREATE DATABASE "([^"]+)"$/);
         if (create) {
           state.createdDatabases.push(create[1]);
+          return { rows: [] };
+        }
+        if (sql.startsWith("SELECT pg_terminate_backend")) {
+          state.terminateConnectionAttempts += 1;
+          if (mode === "terminate-connections") {
+            throw new Error("simulated connection termination failure");
+          }
           return { rows: [] };
         }
         const drop = sql.match(/^DROP DATABASE "([^"]+)"$/);
@@ -56,7 +65,8 @@ function createHarness(mode) {
     }
 
     async end() {
-      if (!this.isAdmin) state.fixtureEnded = true;
+      if (this.isAdmin) state.adminEnded = true;
+      else state.fixtureEnded = true;
     }
   }
 
@@ -86,6 +96,7 @@ function createHarness(mode) {
 async function assertResourcesRemoved(state) {
   assert.equal(state.createdDatabases.length, 1, "a fresh disposable database was created");
   assert.deepEqual(state.droppedDatabases, state.createdDatabases, "the generated database was dropped");
+  assert.equal(state.adminEnded, true, "the administrative connection was closed");
   assert.equal(state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
   await assert.rejects(access(state.tempDirectories[0]), { code: "ENOENT" });
 }
@@ -129,6 +140,15 @@ test("test process failure removes the generated database and temporary files", 
 
   assert.equal(harness.state.fixtureQueries.length, 1);
   assert.equal(harness.state.runTestProcess, true);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("temporary files are removed when terminating database connections fails", async () => {
+  const harness = createHarness("terminate-connections");
+
+  await assert.rejects(runWith(harness), /simulated connection termination failure/);
+
+  assert.equal(harness.state.terminateConnectionAttempts, 1);
   await assertResourcesRemoved(harness.state);
 });
 
