@@ -38,9 +38,18 @@ export async function runRosterTests({
 
   try {
     await admin.connect();
-    const { rows: [{ current_database: source, rolcreatedb }] } = await admin.query(
+    const securityCheck = await admin.query(
       "select current_database(), rolcreatedb from pg_roles where rolname = current_user",
     );
+    const security = securityCheck?.rows?.[0];
+    if (
+      !security ||
+      typeof security.current_database !== "string" ||
+      typeof security.rolcreatedb !== "boolean"
+    ) {
+      throw new Error("Unable to verify the source database and CREATEDB permission.");
+    }
+    const { current_database: source, rolcreatedb } = security;
     if (!rolcreatedb || source.startsWith("roster_test_")) {
       throw new Error("The development database user must have CREATEDB, and the source cannot be a test database.");
     }

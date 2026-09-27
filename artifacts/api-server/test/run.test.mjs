@@ -33,7 +33,11 @@ function createHarness(mode) {
 
     async query(sql) {
       if (this.isAdmin) {
-        if (sql.startsWith("select current_database()")) {
+        if (sql.startsWith("select current_database(), rolcreatedb")) {
+          if (mode === "security-query-error") {
+            throw new Error("simulated security metadata query failure");
+          }
+          if (mode === "missing-security-row") return { rows: [] };
           return {
             rows: [{
               current_database: state.sourceDatabase,
@@ -138,6 +142,14 @@ async function assertEarlySafetyGate(harness) {
   assertNoDatabaseOrFixturesWereCreated(harness.state);
   assert.equal(harness.state.clientCreations, 0, "the gate must run before creating a database client");
   assert.equal(harness.state.tempDirectories.length, 0, "the gate must run before creating temporary files");
+}
+
+async function assertSecurityCheckCleanup(harness) {
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the administrative source connection is opened");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection is closed");
+  assert.equal(harness.state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 }
 
 test("schema generation failure removes the generated database and temporary files", async () => {
@@ -276,4 +288,23 @@ test("a source user without CREATEDB is rejected before creating a database or a
   assert.equal(harness.state.adminEnded, true);
   assert.equal(harness.state.tempDirectories.length, 1);
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("an empty source security query is rejected without creating a database or applying fixtures", async () => {
+  const harness = createHarness("missing-security-row");
+
+  await assert.rejects(
+    runWith(harness),
+    /Unable to verify the source database and CREATEDB permission/,
+  );
+
+  await assertSecurityCheckCleanup(harness);
+});
+
+test("a failed source security query is rejected without creating a database or applying fixtures", async () => {
+  const harness = createHarness("security-query-error");
+
+  await assert.rejects(runWith(harness), /simulated security metadata query failure/);
+
+  await assertSecurityCheckCleanup(harness);
 });
