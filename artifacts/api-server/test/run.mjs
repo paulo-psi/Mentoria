@@ -61,7 +61,7 @@ export async function runRosterTests({
 
     const testUrl = new URL(env.DATABASE_URL);
     testUrl.pathname = `/${databaseName}`;
-    // pg accepts a database query parameter that overrides the URL pathname.
+    // Remove conflicting database options rather than relying on parser precedence.
     testUrl.searchParams.delete("database");
     const testEnv = { ...env, DATABASE_URL: testUrl.toString(), NODE_ENV: "test" };
 
