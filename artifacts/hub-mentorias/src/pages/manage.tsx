@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'wouter';
@@ -24,6 +24,7 @@ import { LogoutButton } from '@/auth';
 import { RosterHistory } from './roster-history';
 
 type TeamFields = { name: string; mainMentorId: string };
+type TeamBaseline = { name: string; mainMentorId: number };
 type NameFields = { name: string };
 const inputClass = 'h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15';
 const secondaryButton = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
@@ -179,16 +180,31 @@ function ManageWorkspace() {
   );
 }
 
-function TeamForm({ initial, mentors, submitLabel, pending, onSubmit, onRefresh, children }: { initial?: Team; mentors: MentorOption[]; submitLabel: string; pending: boolean; onSubmit: (values: { name: string; mainMentorId: number }) => Promise<void>; onRefresh: () => void; children?: ReactNode }) {
+function TeamForm({ initial, mentors, submitLabel, pending, onSubmit, onRefresh, children }: { initial?: Team; mentors: MentorOption[]; submitLabel: string; pending: boolean; onSubmit: (values: TeamBaseline, baseline: TeamBaseline | null) => Promise<Team | void>; onRefresh: () => void; children?: ReactNode }) {
   const form = useForm<TeamFields>({ defaultValues: { name: initial?.name ?? '', mainMentorId: initial ? String(initial.mainMentor.id) : '' } });
+  const baseline = useRef<TeamBaseline | null>(initial ? { name: initial.name, mainMentorId: initial.mainMentor.id } : null);
   const [error, setError] = useState<unknown>(null);
+  // A clean form follows new server data; a draft keeps the version it was based on.
+  useEffect(() => {
+    if (!initial || form.formState.isDirty || pending) return;
+    if (baseline.current?.name === initial.name && baseline.current.mainMentorId === initial.mainMentor.id) return;
+    baseline.current = { name: initial.name, mainMentorId: initial.mainMentor.id };
+    form.reset({ name: initial.name, mainMentorId: String(initial.mainMentor.id) });
+    setError(null);
+  }, [initial?.name, initial?.mainMentor.id, form.formState.isDirty, pending, form]);
   return (
     <Form {...form}>
       <form className="space-y-5" onSubmit={form.handleSubmit(async (values) => {
         const mentorId = Number(values.mainMentorId);
         if (!mentors.some((mentor) => mentor.id === mentorId)) { form.setError('mainMentorId', { message: 'Selecione um mentor disponível.' }); return; }
         setError(null);
-        try { await onSubmit({ name: values.name.trim(), mainMentorId: mentorId }); }
+        try {
+          const saved = await onSubmit({ name: values.name.trim(), mainMentorId: mentorId }, baseline.current);
+          if (saved) {
+            baseline.current = { name: saved.name, mainMentorId: saved.mainMentor.id };
+            form.reset({ name: saved.name, mainMentorId: String(saved.mainMentor.id) });
+          }
+        }
         catch (cause) { setError(cause); }
       })}>
         <div className="grid gap-5 sm:grid-cols-2">
@@ -202,6 +218,16 @@ function TeamForm({ initial, mentors, submitLabel, pending, onSubmit, onRefresh,
           )} />
         </div>
         {children}
+        {initial && baseline.current && (baseline.current.name !== initial.name || baseline.current.mainMentorId !== initial.mainMentor.id) && (
+          <div role="status" className="space-y-2 text-xs text-amber-800" data-testid="status-equipe-alterada">
+            <p>A equipe mudou em outra sessão. Seu rascunho foi preservado. Confira a versão atual antes de tentar salvar novamente.</p>
+            <button type="button" disabled={pending} className={secondaryButton} onClick={() => {
+              baseline.current = { name: initial.name, mainMentorId: initial.mainMentor.id };
+              form.reset({ name: initial.name, mainMentorId: String(initial.mainMentor.id) });
+              setError(null);
+            }} data-testid="button-recarregar-formulario-equipe">Descartar rascunho e carregar versão atual</button>
+          </div>
+        )}
         {mentors.length === 0 && <p className="text-xs text-destructive" data-testid="status-sem-mentores">Não há mentores disponíveis para associação. Solicite o cadastro de um mentor antes de criar a equipe.</p>}
         <MutationError error={error} onRefresh={onRefresh} testId="erro-salvar-equipe" />
         <button type="submit" className={primaryButton} disabled={pending || mentors.length === 0} data-testid="button-salvar-equipe">{pending ? 'Salvando…' : submitLabel}</button>
@@ -253,18 +279,20 @@ function TeamDetail({ team, mentors, commit, onRefresh, onDeleted, onNotice }: {
           <div><p className="font-mono-ui text-[10px] uppercase tracking-[0.14em] text-primary">Conferência / equipe</p><h3 className="mt-1 break-words font-display text-[27px] tracking-[-0.035em]" data-testid={`text-manage-equipe-${team.id}`}>{team.name}</h3></div>
           <span className="rounded-full bg-muted px-3 py-1.5 text-[11px] font-semibold text-muted-foreground" data-testid={`text-sessoes-${team.id}`}>{team.sessionCount} {team.sessionCount === 1 ? 'sessão registrada' : 'sessões registradas'}</span>
         </div>
-        <TeamForm key={`${team.name}-${team.mainMentor.id}`} initial={team} mentors={mentors} pending={update.isPending} submitLabel="Salvar alterações" onRefresh={onRefresh} onSubmit={async (data) => {
-          const nameChanged = data.name !== team.name;
-          const mentorChanged = data.mainMentorId !== team.mainMentor.id;
+        <TeamForm initial={team} mentors={mentors} pending={update.isPending} submitLabel="Salvar alterações" onRefresh={onRefresh} onSubmit={async (data, baseline) => {
+          if (!baseline) throw new Error('Não foi possível identificar a versão inicial da equipe.');
+          const nameChanged = data.name !== baseline.name;
+          const mentorChanged = data.mainMentorId !== baseline.mainMentorId;
           if (!nameChanged && !mentorChanged) { onNotice('Nenhuma alteração para salvar.'); return; }
           const saved = await update.mutateAsync({ teamId: team.id, data: {
-            expectedName: team.name,
-            expectedMainMentorId: team.mainMentor.id,
+            expectedName: baseline.name,
+            expectedMainMentorId: baseline.mainMentorId,
             ...(nameChanged ? { name: data.name } : {}),
             ...(mentorChanged ? { mainMentorId: data.mainMentorId } : {}),
           } });
           await commit((current) => current.map((item) => item.id === team.id ? saved : item));
           onNotice('Dados da equipe salvos na relação oficial.');
+          return saved;
         }} />
       </section>
       <StudentSection team={team} commit={commit} onRefresh={onRefresh} onNotice={onNotice} />
@@ -338,25 +366,27 @@ function StudentRow({ teamId, student, commit, onRefresh, onNotice }: { teamId: 
   const remove = useDeleteStudent();
   const form = useForm<NameFields>({ defaultValues: { name: student.name } });
   const [editing, setEditing] = useState(false);
+  const [renameBaseline, setRenameBaseline] = useState<string | null>(null);
   const [deleteSnapshot, setDeleteSnapshot] = useState<{ teamId: number; studentId: number; data: { expectedName: string } } | null>(null);
   const [error, setError] = useState<unknown>(null);
   return (
     <div className="py-3" data-testid={`row-estudante-${student.id}`}>
       {editing ? <Form {...form}><form className="flex flex-col gap-2 sm:flex-row sm:items-start" onSubmit={form.handleSubmit(async ({ name }) => {
         setError(null);
-        if (name.trim() === student.name) { setEditing(false); onNotice('Nenhuma alteração para salvar.'); return; }
+        if (renameBaseline === null) { setError(new Error('Não foi possível identificar o nome inicial do estudante.')); return; }
+        if (name.trim() === renameBaseline) { setEditing(false); setRenameBaseline(null); onNotice('Nenhuma alteração para salvar.'); return; }
         try {
-          const saved = await update.mutateAsync({ teamId, studentId: student.id, data: { name: name.trim(), expectedName: student.name } });
+          const saved = await update.mutateAsync({ teamId, studentId: student.id, data: { name: name.trim(), expectedName: renameBaseline } });
           await commit((current) => current.map((item) => item.id === teamId ? { ...item, students: item.students.map((entry) => entry.id === student.id ? saved : entry) } : item));
-          form.reset({ name: saved.name }); setEditing(false); onNotice('Nome do estudante atualizado.');
+          form.reset({ name: saved.name }); setRenameBaseline(null); setEditing(false); onNotice('Nome do estudante atualizado.');
         } catch (cause) { setError(cause); }
       })}>
         <FormField control={form.control} name="name" rules={{ validate: (value) => value.trim().length > 0 && value.trim().length <= 200 || 'Informe um nome de até 200 caracteres.' }} render={({ field }) => (
           <FormItem className="flex-1"><FormControl><input {...field} className={inputClass} maxLength={200} aria-label={`Nome de ${student.name}`} data-testid={`input-editar-estudante-${student.id}`} /></FormControl><FormMessage /></FormItem>
         )} />
-        <div className="flex gap-2"><button type="submit" disabled={update.isPending} className={primaryButton} data-testid={`button-confirmar-edicao-estudante-${student.id}`}>{update.isPending ? 'Salvando…' : 'Salvar'}</button><button type="button" className={secondaryButton} data-testid={`button-cancelar-edicao-estudante-${student.id}`} onClick={() => { form.reset({ name: student.name }); setEditing(false); setError(null); }}>Cancelar</button></div>
+        <div className="flex gap-2"><button type="submit" disabled={update.isPending} className={primaryButton} data-testid={`button-confirmar-edicao-estudante-${student.id}`}>{update.isPending ? 'Salvando…' : 'Salvar'}</button><button type="button" className={secondaryButton} data-testid={`button-cancelar-edicao-estudante-${student.id}`} onClick={() => { form.reset({ name: student.name }); setRenameBaseline(null); setEditing(false); setError(null); }}>Cancelar</button></div>
       </form></Form> : <div className="flex flex-wrap items-center justify-between gap-2"><span className="min-w-0 break-words text-sm" data-testid={`text-estudante-${student.id}`}>{student.name}</span><div className="flex gap-2">
-         <button type="button" className={secondaryButton} data-testid={`button-editar-estudante-${student.id}`} onClick={() => { form.reset({ name: student.name }); setError(null); setEditing(true); setDeleteSnapshot(null); }}>Renomear</button>
+         <button type="button" className={secondaryButton} data-testid={`button-editar-estudante-${student.id}`} onClick={() => { form.reset({ name: student.name }); setRenameBaseline(student.name); setError(null); setEditing(true); setDeleteSnapshot(null); }}>Renomear</button>
         <button type="button" className={`${secondaryButton} text-destructive`} data-testid={`button-excluir-estudante-${student.id}`} onClick={() => { setDeleteSnapshot({ teamId, studentId: student.id, data: { expectedName: student.name } }); setError(null); setEditing(false); }}>Remover</button>
       </div></div>}
       {deleteSnapshot && <div className="mt-3 rounded-lg border border-destructive/25 bg-destructive/5 p-3" data-testid={`confirmacao-excluir-estudante-${student.id}`}>
@@ -373,6 +403,9 @@ function StudentRow({ teamId, student, commit, onRefresh, onNotice }: { teamId: 
             } catch (cause) { setError(cause); }
           }}>{remove.isPending ? 'Removendo…' : 'Sim, remover'}</button></div>
       </div>}
+      {editing && renameBaseline !== null && renameBaseline !== student.name && <p className="mt-2 text-xs text-amber-800" data-testid={`status-nome-alterado-estudante-${student.id}`}>
+        A relação agora registra “{student.name}” em vez de “{renameBaseline}”. Seu rascunho foi preservado, mas ainda usa o nome anterior como referência. Para editar a nova versão, cancele e clique em Renomear novamente.
+      </p>}
       <MutationError error={error} onRefresh={() => { if (deleteSnapshot) { setDeleteSnapshot(null); setError(null); } onRefresh(); }} testId={`erro-estudante-${student.id}`} />
     </div>
   );
