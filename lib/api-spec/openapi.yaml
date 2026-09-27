@@ -16,7 +16,36 @@ tags:
     description: User permissions
   - name: mentors
     description: Available mentors
+  - name: audit
+    description: Administrator-only roster history
 paths:
+  /roster-audit:
+    get:
+      operationId: getRosterAudit
+      tags: [audit]
+      summary: View recent roster changes, optionally filtered by team or student ID
+      parameters:
+        - name: teamId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: studentId
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Most recent 100 changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RosterAuditEvent"
+        "400":
+          description: Invalid filter
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
   /healthz:
     get:
       operationId: healthCheck
@@ -336,6 +365,17 @@ paths:
           description: Approved access required
 components:
   schemas:
+    RosterAuditEvent:
+      type: object
+      properties:
+        id: { type: integer }
+        teamId: { type: integer }
+        studentId: { type: ["integer", "null"] }
+        action: { type: string }
+        actorEmail: { type: string }
+        summary: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, teamId, studentId, action, actorEmail, summary, createdAt]
     ErrorResponse:
       type: object
       properties:

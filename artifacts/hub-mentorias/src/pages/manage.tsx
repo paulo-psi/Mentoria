@@ -6,6 +6,7 @@ import { ArrowLeft, CircleAlert, ClipboardList, LockKeyhole, Plus, RefreshCw, Tr
 import {
   getGetAccessPermissionsQueryKey,
   getGetMentorsQueryKey,
+  getGetRosterAuditQueryKey,
   getGetTeamsQueryKey,
   useCreateStudent,
   useCreateTeam,
@@ -20,6 +21,7 @@ import {
 import type { MentorOption, Student, Team, TeamDeleteInput } from '@workspace/api-client-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { LogoutButton } from '@/auth';
+import { RosterHistory } from './roster-history';
 
 type TeamFields = { name: string; mainMentorId: string };
 type NameFields = { name: string };
@@ -115,6 +117,7 @@ function ManageWorkspace() {
     queryClient.setQueryData<Team[]>(getGetTeamsQueryKey(), (current) => updater(current ?? []));
     // A confirmed write is already visible. Reading again must never turn it into a save error.
     void queryClient.invalidateQueries({ queryKey: getGetTeamsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getGetRosterAuditQueryKey() });
   };
 
   return (
@@ -171,6 +174,7 @@ function ManageWorkspace() {
           </section>
         </div>
       )}
+      <RosterHistory team={selected} />
     </div>
   );
 }

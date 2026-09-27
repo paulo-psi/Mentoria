@@ -15,6 +15,7 @@ import {
   insertTeamSchema,
   mentorsTable,
   mentoringSessionsTable,
+  rosterAuditTable,
   studentsTable,
   teamsTable,
 } from "@workspace/db";
@@ -65,10 +66,18 @@ router.post("/teams", requireApprovedUser, requireAdministrator, async (req, res
         .returning({ id: teamsTable.id });
 
       if (students.length) {
-        await tx.insert(studentsTable).values(students.map((student, sortOrder) =>
+        const createdStudents = await tx.insert(studentsTable).values(students.map((student, sortOrder) =>
           insertStudentSchema.parse({ teamId: team.id, name: student, sortOrder })
-        ));
+        )).returning({ id: studentsTable.id });
+        await tx.insert(rosterAuditTable).values(createdStudents.map((student) => ({
+          teamId: team.id, studentId: student.id, action: "student.created",
+          actorEmail: res.locals.approvedEmail, summary: "Estudante incluído na criação da equipe.",
+        })));
       }
+      await tx.insert(rosterAuditTable).values({
+        teamId: team.id, action: "team.created", actorEmail: res.locals.approvedEmail,
+        summary: `Equipe criada; mentor responsável #${mentor.id}; ${students.length} estudante(s) inicial(is).`,
+      });
       return team.id;
     });
 
@@ -138,7 +147,20 @@ router.patch("/teams/:teamId", requireApprovedUser, requireAdministrator, async 
           eq(teamsTable.mainMentorId, body.data.expectedMainMentorId),
         ))
         .returning({ id: teamsTable.id });
-      if (updated) return { status: "updated", id: updated.id } as const;
+      if (updated) {
+        const changes = [
+          ...(updates.name !== undefined && updates.name !== body.data.expectedName ? ["nome da equipe alterado"] : []),
+          ...(updates.mainMentorId !== undefined && updates.mainMentorId !== body.data.expectedMainMentorId
+            ? [`mentor responsável #${body.data.expectedMainMentorId} → #${updates.mainMentorId}`] : []),
+        ];
+        if (changes.length) {
+          await tx.insert(rosterAuditTable).values({
+            teamId: updated.id, action: updates.mainMentorId !== undefined && updates.mainMentorId !== body.data.expectedMainMentorId ? "team.mentor_changed" : "team.updated",
+            actorEmail: res.locals.approvedEmail, summary: changes.join("; ") + ".",
+          });
+        }
+        return { status: "updated", id: updated.id } as const;
+      }
 
       const [existing] = await tx
         .select({ id: teamsTable.id })
@@ -223,6 +245,14 @@ router.delete("/teams/:teamId", requireApprovedUser, requireAdministrator, async
     if (session) return "has-sessions" as const;
 
     await tx.delete(teamsTable).where(eq(teamsTable.id, teamId));
+    await tx.insert(rosterAuditTable).values([
+      { teamId, action: "team.deleted", actorEmail: res.locals.approvedEmail,
+        summary: `Equipe excluída com ${currentStudents.length} estudante(s).` },
+      ...currentStudents.map((student) => ({
+        teamId, studentId: student.id, action: "student.deleted",
+        actorEmail: res.locals.approvedEmail, summary: "Estudante removido pela exclusão da equipe.",
+      })),
+    ]);
     return "deleted" as const;
   });
 

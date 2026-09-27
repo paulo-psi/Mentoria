@@ -8,12 +8,14 @@
 
 export * from './accessPermissions';
 export * from './errorResponse';
+export * from './getRosterAuditParams';
 export * from './healthStatus';
 export * from './healthStatusDatabase';
 export * from './healthStatusStatus';
 export * from './mentor';
 export * from './mentorMentorType';
 export * from './mentorOption';
+export * from './rosterAuditEvent';
 export * from './serverStatus';
 export * from './serverStatusStatus';
 export * from './student';

@@ -22,8 +22,10 @@ import type {
 import type {
   AccessPermissions,
   ErrorResponse,
+  GetRosterAuditParams,
   HealthStatus,
   MentorOption,
+  RosterAuditEvent,
   ServerStatus,
   Student,
   StudentDeleteInput,
@@ -61,6 +63,90 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetRosterAuditUrl = (params?: GetRosterAuditParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/roster-audit?${stringifiedParams}` : `/api/roster-audit`
+}
+
+/**
+ * @summary View recent roster changes, optionally filtered by team or student ID
+ */
+export const getRosterAudit = async (params?: GetRosterAuditParams, options?: Parameters<typeof customFetch>[1]): Promise<RosterAuditEvent[]> => {
+
+  return customFetch<RosterAuditEvent[]>(getGetRosterAuditUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetRosterAuditQueryKey = (params?: GetRosterAuditParams,) => {
+    return [
+    `/api/roster-audit`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetRosterAuditQueryOptions = <TData = Awaited<ReturnType<typeof getRosterAudit>>, TError = ErrorType<void>>(params?: GetRosterAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRosterAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetRosterAuditQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getRosterAudit>>> = ({ signal }) => getRosterAudit(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getRosterAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetRosterAuditQueryResult = NonNullable<Awaited<ReturnType<typeof getRosterAudit>>>
+export type GetRosterAuditQueryError = ErrorType<void>
+
+
+/**
+ * @summary View recent roster changes, optionally filtered by team or student ID
+ */
+
+export function useGetRosterAudit<TData = Awaited<ReturnType<typeof getRosterAudit>>, TError = ErrorType<void>>(
+ params?: GetRosterAuditParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getRosterAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetRosterAuditQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getHealthCheckUrl = () => {
 

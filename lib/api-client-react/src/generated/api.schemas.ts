@@ -5,6 +5,17 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface RosterAuditEvent {
+  id: number;
+  teamId: number;
+  /** @nullable */
+  studentId: number | null;
+  action: string;
+  actorEmail: string;
+  summary: string;
+  createdAt: string;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -176,4 +187,15 @@ export interface StudentDeleteInput {
      */
   expectedName: string;
 }
+
+export type GetRosterAuditParams = {
+/**
+ * @minimum 1
+ */
+teamId?: number;
+/**
+ * @minimum 1
+ */
+studentId?: number;
+};
 

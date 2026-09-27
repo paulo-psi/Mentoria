@@ -10,7 +10,7 @@ import {
   UpdateStudentParams,
   UpdateStudentResponse,
 } from "@workspace/api-zod";
-import { db, insertStudentSchema, studentsTable, teamsTable } from "@workspace/db";
+import { db, insertStudentSchema, rosterAuditTable, studentsTable, teamsTable } from "@workspace/db";
 import { rosterWriteLock } from "../lib/roster-lock";
 import { requireAdministrator, requireApprovedUser } from "../middlewares/requireApprovedUser";
 
@@ -50,6 +50,10 @@ router.post("/teams/:teamId/students", requireApprovedUser, requireAdministrator
         sortOrder: (last?.sortOrder ?? -1) + 1,
       }))
       .returning();
+    await tx.insert(rosterAuditTable).values({
+      teamId, studentId: created.id, action: "student.created",
+      actorEmail: res.locals.approvedEmail, summary: "Estudante incluído na equipe.",
+    });
     return created;
   });
 
@@ -80,7 +84,15 @@ router.patch("/teams/:teamId/students/:studentId", requireApprovedUser, requireA
         eq(studentsTable.name, body.data.expectedName),
       ))
       .returning();
-    if (student) return { status: "updated", student } as const;
+    if (student) {
+      if (student.name !== body.data.expectedName) {
+        await tx.insert(rosterAuditTable).values({
+          teamId: params.data.teamId, studentId: student.id, action: "student.updated",
+          actorEmail: res.locals.approvedEmail, summary: "Nome do estudante alterado.",
+        });
+      }
+      return { status: "updated", student } as const;
+    }
 
     const [existing] = await tx
       .select({ id: studentsTable.id })
@@ -152,6 +164,10 @@ router.delete("/teams/:teamId/students/:studentId", requireApprovedUser, require
           .where(eq(studentsTable.id, member.id));
       }
     }
+    await tx.insert(rosterAuditTable).values({
+      teamId, studentId, action: "student.deleted",
+      actorEmail: res.locals.approvedEmail, summary: "Estudante removido da equipe.",
+    });
     return "deleted" as const;
   });
 

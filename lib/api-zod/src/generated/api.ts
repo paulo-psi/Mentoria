@@ -9,6 +9,30 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary View recent roster changes, optionally filtered by team or student ID
+ */
+
+
+
+
+export const GetRosterAuditQueryParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1).optional(),
+  "studentId": zod.coerce.number().int().min(1).optional()
+})
+
+export const GetRosterAuditResponseItem = zod.object({
+  "id": zod.number().int(),
+  "teamId": zod.number().int(),
+  "studentId": zod.number().int().nullable(),
+  "action": zod.string(),
+  "actorEmail": zod.string(),
+  "summary": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const GetRosterAuditResponse = zod.array(GetRosterAuditResponseItem)
+
+
+/**
  * Returns whether the API process is available
  * @summary Server health check
  */
