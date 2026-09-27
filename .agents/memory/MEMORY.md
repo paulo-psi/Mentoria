@@ -1,1 +1,2 @@
 - [Clerk production proxy](clerk-production-proxy.md) — the frontend proxy URL is injected outside the repository in production; keep the canonical unconditional Clerk wiring.
+- [Drizzle CLI limitations](drizzle-cli.md) — schema generation rejects combined config/output flags; invoke the installed CLI rather than resolving its private entrypoint.

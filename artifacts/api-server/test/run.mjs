@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,10 +37,43 @@ try {
 
   const testUrl = new URL(process.env.DATABASE_URL);
   testUrl.pathname = `/${databaseName}`;
+  // pg accepts a database query parameter that overrides the URL pathname.
+  testUrl.searchParams.delete("database");
+  const testEnv = { ...process.env, DATABASE_URL: testUrl.toString(), NODE_ENV: "test" };
+
+  // Generate from the application's own Drizzle config, with no previous
+  // snapshot, so every table, index and constraint is included on every run.
+  // `generate` only writes SQL files; never use push/migrate against the source.
+  const migrationsDir = path.join(workingDir, "schema");
+  const testConfig = path.join(workingDir, "drizzle.config.ts");
+  const appConfig = fileURLToPath(new URL("../../../lib/db/drizzle.config.ts", import.meta.url));
+  // Drizzle does not allow --out alongside --config. Inherit the real config
+  // and override only its output directory, without copying its schema settings.
+  await writeFile(testConfig, `import config from ${JSON.stringify(appConfig)};
+export default { ...config, out: ${JSON.stringify(migrationsDir)} };
+`);
+  const generation = spawnSync("pnpm", [
+    "exec", "drizzle-kit",
+    "generate",
+    `--config=${testConfig}`,
+  ], {
+    cwd: fileURLToPath(new URL("../../../lib/db", import.meta.url)),
+    env: testEnv,
+    stdio: "inherit",
+  });
+  if (generation.error) throw generation.error;
+  if (generation.status !== 0) throw new Error("Failed to generate the application schema for roster tests.");
+  const migrations = (await readdir(migrationsDir)).filter((name) => name.endsWith(".sql"));
+  if (migrations.length !== 1) {
+    throw new Error("Expected exactly one initial migration from the application schema.");
+  }
+
   const fixture = new Client({ connectionString: testUrl.toString() });
   try {
     await fixture.connect();
-    await fixture.query(await readFile(path.join(directory, "schema.sql"), "utf8"));
+    const { rows: [{ name }] } = await fixture.query("select current_database() as name");
+    if (name !== databaseName) throw new Error("Refusing to apply fixtures outside the generated test database.");
+    await fixture.query(await readFile(path.join(migrationsDir, migrations[0]), "utf8"));
   } finally {
     await fixture.end();
   }
@@ -62,7 +95,7 @@ globalThis.require = __createRequire(import.meta.url);`,
   });
   const result = spawnSync(process.execPath, [output], {
     cwd: path.dirname(directory),
-    env: { ...process.env, DATABASE_URL: testUrl.toString(), NODE_ENV: "test" },
+    env: testEnv,
     stdio: "inherit",
   });
   if (result.error) throw result.error;
