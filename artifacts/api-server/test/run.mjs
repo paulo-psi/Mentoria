@@ -35,6 +35,8 @@ export async function runRosterTests({
   const admin = new Client({ connectionString: env.DATABASE_URL });
   const workingDir = await fs.mkdtemp(path.join(tempDirectory, "roster-test-"));
   let created = false;
+  let result;
+  let operationError;
 
   try {
     await admin.connect();
@@ -115,34 +117,57 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
 globalThis.require = __createRequire(import.meta.url);`,
       },
     });
-    const result = spawn(process.execPath, [output], {
+    const testProcess = spawn(process.execPath, [output], {
       cwd: path.dirname(directory),
       env: testEnv,
       stdio: "inherit",
     });
-    if (result.error) throw result.error;
-    return result.status === 0 ? 0 : result.status ?? 1;
-  } finally {
-    try {
-      if (created) {
-        try {
-          // Terminate only connections to this generated test database.
-          await admin.query(
-            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
-            [databaseName],
-          );
-        } finally {
-          await admin.query(`DROP DATABASE "${databaseName}"`);
-        }
-      }
-    } finally {
-      try {
-        await admin.end();
-      } finally {
-        await fs.rm(workingDir, { recursive: true, force: true });
-      }
-    }
+    if (testProcess.error) throw testProcess.error;
+    result = testProcess.status === 0 ? 0 : testProcess.status ?? 1;
+  } catch (error) {
+    operationError = error;
   }
+
+  const cleanupErrors = [];
+  const attemptCleanup = async (cleanup) => {
+    try {
+      await cleanup();
+    } catch (error) {
+      cleanupErrors.push(error);
+    }
+  };
+
+  if (created) {
+    // Attempt each cleanup independently so one failure cannot skip the rest.
+    // Terminate only connections to this generated test database.
+    await attemptCleanup(() => admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      [databaseName],
+    ));
+    await attemptCleanup(() => admin.query(`DROP DATABASE "${databaseName}"`));
+  }
+  await attemptCleanup(() => admin.end());
+  await attemptCleanup(() => fs.rm(workingDir, { recursive: true, force: true }));
+
+  if (cleanupErrors.length > 0 && (operationError || result !== 0)) {
+    const primaryError = operationError ?? Object.assign(
+      new Error(`Roster test process exited with status ${result}.`),
+      { exitCode: result },
+    );
+    throw new AggregateError(
+      [primaryError, ...cleanupErrors],
+      "Roster test operation failed and cleanup also failed.",
+      { cause: primaryError },
+    );
+  }
+  if (operationError) throw operationError;
+  if (cleanupErrors.length === 1) throw cleanupErrors[0];
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(cleanupErrors, "Roster test cleanup failed.", {
+      cause: cleanupErrors[0],
+    });
+  }
+  return result;
 }
 
 async function main() {

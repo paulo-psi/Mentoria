@@ -75,7 +75,11 @@ function createHarness(mode) {
         const drop = sql.match(/^DROP DATABASE "([^"]+)"$/);
         if (drop) {
           state.dropDatabaseAttempts += 1;
-          if (mode === "drop-database") {
+          if (
+            mode === "drop-database" ||
+            mode === "roster-and-drop-failure" ||
+            mode === "nonzero-roster-and-drop-failure"
+          ) {
             throw new Error("simulated database drop failure");
           }
           state.droppedDatabases.push(drop[1]);
@@ -125,7 +129,15 @@ function createHarness(mode) {
       return { status: mode === "generate-schema" ? 3 : 0 };
     }
     state.runTestProcess = true;
-    return { status: mode === "run-tests" ? 7 : 0 };
+    if (mode === "roster-and-drop-failure") {
+      throw new Error("simulated roster test execution failure");
+    }
+    return {
+      status:
+        mode === "run-tests" || mode === "nonzero-roster-and-drop-failure"
+          ? 7
+          : 0,
+    };
   };
 
   return { state, FakeClient, fs, spawn };
@@ -225,6 +237,44 @@ test("test process failure removes the generated database and temporary files", 
   assert.equal(harness.state.fixtureQueries.length, 1);
   assert.equal(harness.state.runTestProcess, true);
   await assertResourcesRemoved(harness.state);
+});
+
+test("roster test failure remains visible when administrative cleanup also fails", async () => {
+  const harness = createHarness("roster-and-drop-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.errors[0].message, /simulated roster test execution failure/);
+    assert.match(error.errors[1].message, /simulated database drop failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the generated database drop was attempted");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-file cleanup was attempted");
+  assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
+  assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("nonzero roster test status remains visible when administrative cleanup fails", async () => {
+  const harness = createHarness("nonzero-roster-and-drop-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors[0].exitCode, 7);
+    assert.match(error.errors[0].message, /exited with status 7/);
+    assert.match(error.errors[1].message, /simulated database drop failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the generated database drop was attempted");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-file cleanup was attempted");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("temporary files are removed when terminating database connections fails", async () => {
