@@ -49,7 +49,7 @@ paths:
       operationId: getTeams
       tags: [teams]
       summary: List mentoring teams
-      description: Returns each team with its lead mentor and completed session count.
+      description: Returns each team with its lead mentor, ordered students, and session count.
       responses:
         "200":
           description: Teams
@@ -89,18 +89,32 @@ components:
         name:
           type: string
         email:
-          type: string
+          type: ["string", "null"]
         expertiseArea:
-          type: string
+          type: ["string", "null"]
         mentorType:
-          type: string
-          enum: [interno, externo]
+          type: ["string", "null"]
+          enum: [interno, externo, null]
       required:
         - id
         - name
         - email
         - expertiseArea
         - mentorType
+    Student:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sortOrder:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - name
+        - sortOrder
     Team:
       type: object
       properties:
@@ -109,14 +123,18 @@ components:
         name:
           type: string
         pitchSummary:
-          type: string
+          type: ["string", "null"]
         currentStage:
-          type: string
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
         mainMentor:
           $ref: "#/components/schemas/Mentor"
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/Student"
         sessionCount:
           type: integer
           minimum: 0
@@ -127,5 +145,6 @@ components:
         - currentStage
         - createdAt
         - mainMentor
+        - students
         - sessionCount
 

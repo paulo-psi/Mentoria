@@ -6,7 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type MentorMentorType = typeof MentorMentorType[keyof typeof MentorMentorType];
+/**
+ * @nullable
+ */
+export type MentorMentorType = typeof MentorMentorType[keyof typeof MentorMentorType] | null;
 
 
 export const MentorMentorType = {

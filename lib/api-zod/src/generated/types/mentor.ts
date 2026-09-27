@@ -10,7 +10,10 @@ import type { MentorMentorType } from './mentorMentorType';
 export interface Mentor {
   id: number;
   name: string;
-  email: string;
-  expertiseArea: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  expertiseArea: string | null;
+  /** @nullable */
   mentorType: MentorMentorType;
 }

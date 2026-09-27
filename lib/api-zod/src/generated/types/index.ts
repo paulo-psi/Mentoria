@@ -13,4 +13,5 @@ export * from './mentor';
 export * from './mentorMentorType';
 export * from './serverStatus';
 export * from './serverStatusStatus';
+export * from './student';
 export * from './team';

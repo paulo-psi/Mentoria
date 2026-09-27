@@ -27,9 +27,11 @@ export const GetHealthResponse = zod.object({
 
 
 /**
- * Returns each team with its lead mentor and completed session count.
+ * Returns each team with its lead mentor, ordered students, and session count.
  * @summary List mentoring teams
  */
+export const getTeamsResponseStudentsItemSortOrderMin = 0;
+
 export const getTeamsResponseSessionCountMin = 0;
 
 
@@ -37,16 +39,21 @@ export const getTeamsResponseSessionCountMin = 0;
 export const GetTeamsResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
-  "pitchSummary": zod.string(),
-  "currentStage": zod.string(),
+  "pitchSummary": zod.string().nullable(),
+  "currentStage": zod.string().nullable(),
   "createdAt": zod.coerce.date(),
   "mainMentor": zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
-  "email": zod.string(),
-  "expertiseArea": zod.string(),
-  "mentorType": zod.enum(['interno', 'externo'])
+  "email": zod.string().nullable(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable()
 }),
+  "students": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "sortOrder": zod.number().int().min(getTeamsResponseStudentsItemSortOrderMin)
+})),
   "sessionCount": zod.number().int().min(getTeamsResponseSessionCountMin)
 })
 export const GetTeamsResponse = zod.array(GetTeamsResponseItem)

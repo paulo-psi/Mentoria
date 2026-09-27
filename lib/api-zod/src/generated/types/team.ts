@@ -6,14 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Mentor } from './mentor';
+import type { Student } from './student';
 
 export interface Team {
   id: number;
   name: string;
-  pitchSummary: string;
-  currentStage: string;
+  /** @nullable */
+  pitchSummary: string | null;
+  /** @nullable */
+  currentStage: string | null;
   createdAt: Date;
   mainMentor: Mentor;
+  students: Student[];
   /** @minimum 0 */
   sessionCount: number;
 }

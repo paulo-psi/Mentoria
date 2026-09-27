@@ -8,9 +8,9 @@ export const mentorsTable = pgTable(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    email: text("email").notNull().unique(),
-    expertiseArea: text("expertise_area").notNull(),
-    mentorType: text("mentor_type").notNull(),
+    email: text("email").unique(),
+    expertiseArea: text("expertise_area"),
+    mentorType: text("mentor_type"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -20,9 +20,9 @@ export const mentorsTable = pgTable(
 
 export const insertMentorSchema = createInsertSchema(mentorsTable, {
   name: z.string().trim().min(1),
-  email: z.email(),
-  expertiseArea: z.string().trim().min(1),
-  mentorType: z.enum(["interno", "externo"]),
+  email: z.email().nullable(),
+  expertiseArea: z.string().trim().min(1).nullable(),
+  mentorType: z.enum(["interno", "externo"]).nullable(),
 }).omit({ id: true, createdAt: true });
 
 export type InsertMentor = z.infer<typeof insertMentorSchema>;

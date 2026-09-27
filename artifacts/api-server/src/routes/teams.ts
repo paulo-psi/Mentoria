@@ -1,7 +1,7 @@
 import { asc, count, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { GetTeamsResponse } from "@workspace/api-zod";
-import { db, mentorsTable, mentoringSessionsTable, teamsTable } from "@workspace/db";
+import { db, mentorsTable, mentoringSessionsTable, studentsTable, teamsTable } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -26,6 +26,23 @@ router.get("/teams", async (_req, res): Promise<void> => {
     .groupBy(teamsTable.id, mentorsTable.id)
     .orderBy(asc(teamsTable.id));
 
+  const studentRows = await db
+    .select({
+      teamId: studentsTable.teamId,
+      id: studentsTable.id,
+      name: studentsTable.name,
+      sortOrder: studentsTable.sortOrder,
+    })
+    .from(studentsTable)
+    .orderBy(asc(studentsTable.teamId), asc(studentsTable.sortOrder));
+
+  const studentsByTeam = new Map<number, typeof studentRows>();
+  for (const student of studentRows) {
+    const members = studentsByTeam.get(student.teamId) ?? [];
+    members.push(student);
+    studentsByTeam.set(student.teamId, members);
+  }
+
   res.json(
     GetTeamsResponse.parse(
       rows.map((row) => ({
@@ -41,6 +58,11 @@ router.get("/teams", async (_req, res): Promise<void> => {
           expertiseArea: row.mentorExpertiseArea,
           mentorType: row.mentorType,
         },
+        students: (studentsByTeam.get(row.id) ?? []).map(({ id, name, sortOrder }) => ({
+          id,
+          name,
+          sortOrder,
+        })),
         sessionCount: row.sessionCount,
       })),
     ),

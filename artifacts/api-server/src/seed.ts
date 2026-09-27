@@ -1,16 +1,18 @@
-import { count, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import {
   db,
   mentorsTable,
   teamsTable,
   mentoringSessionsTable,
+  studentsTable,
   insertMentorSchema,
   insertTeamSchema,
-  insertMentoringSessionSchema,
+  insertStudentSchema,
 } from "@workspace/db";
 import { logger } from "./lib/logger";
+import { officialTeams } from "./official-data";
 
-const mentors = [
+const legacyDemoMentors = [
   { name: "Ana Beatriz Costa", email: "ana.costa@example.org", expertiseArea: "Growth & Marketing", mentorType: "interno" },
   { name: "Bruno Almeida", email: "bruno.almeida@example.org", expertiseArea: "Finanças & Pricing", mentorType: "interno" },
   { name: "Camila Rezende", email: "camila.rezende@example.org", expertiseArea: "Produto & UX", mentorType: "interno" },
@@ -23,7 +25,7 @@ const mentors = [
   { name: "João Pedro Farias", email: "joao.farias@example.org", expertiseArea: "Expansão Internacional", mentorType: "externo" },
 ] as const;
 
-const teams = [
+const legacyDemoTeams = [
   {
     name: "Verdeira",
     pitchSummary: "Conecta pequenos produtores a restaurantes com previsão de demanda para reduzir perdas de alimentos.",
@@ -98,82 +100,190 @@ const teams = [
   },
 ] as const;
 
-function dateDaysAgo(days: number): string {
-  const day = new Date();
-  day.setHours(12, 0, 0, 0);
-  day.setDate(day.getDate() - days);
-  return [
-    day.getFullYear(),
-    String(day.getMonth() + 1).padStart(2, "0"),
-    String(day.getDate()).padStart(2, "0"),
-  ].join("-");
+type MentorRow = typeof mentorsTable.$inferSelect;
+type TeamRow = typeof teamsTable.$inferSelect;
+type SessionRow = typeof mentoringSessionsTable.$inferSelect;
+type StudentRow = typeof studentsTable.$inferSelect;
+
+function matchesOfficialDataset(mentors: MentorRow[], teams: TeamRow[], students: StudentRow[]): boolean {
+  const expectedStudentCount = officialTeams.reduce((total, team) => total + team.students.length, 0);
+  if (mentors.length < officialTeams.length || teams.length < officialTeams.length || students.length < expectedStudentCount) {
+    return false;
+  }
+
+  const mentorNameById = new Map(mentors.map((mentor): [number, string] => [mentor.id, mentor.name]));
+  const teamIdByName = new Map(teams.map((team): [string, number] => [team.name, team.id]));
+  const registeredStudents = new Set(students.map((student) =>
+    `${student.teamId}\u0000${student.sortOrder}\u0000${student.name}`,
+  ));
+  for (const expected of officialTeams) {
+    const actual = teams.find((team) => team.name === expected.name);
+    if (!actual || mentorNameById.get(actual.mainMentorId) !== expected.mentor) return false;
+    const teamId = teamIdByName.get(expected.name);
+    if (expected.students.some((name, sortOrder) =>
+      !registeredStudents.has(`${teamId}\u0000${sortOrder}\u0000${name}`)
+    )) return false;
+  }
+  return true;
+}
+
+function legacySessionPayloads(
+  mentorIdByName: Map<string, number>,
+  teamIdByName: Map<string, number>,
+) {
+  return legacyDemoTeams.flatMap((team, index) =>
+    [0, 1, 2].map((week) => {
+      const external = week === 2 && index % 2 === 0;
+      const mentorIndex = external ? 8 + ((index / 2) % 2) : week === 1 ? (index + 2) % 8 : index;
+      return {
+        teamId: teamIdByName.get(team.name)!,
+        mentorId: mentorIdByName.get(legacyDemoMentors[mentorIndex].name)!,
+        sessionType: week === 0 ? "principal" : external ? "externo" : week === 1 ? "transversal" : "principal",
+        teamNps: Math.min(10, 6 + (index % 3) + week),
+        teamActionability: Math.min(10, 5 + (index % 4) + week),
+        mentorCommitment: Math.min(10, 6 + ((index + 1) % 3) + week),
+        mentorTraction: Math.min(10, 5 + ((index + 2) % 4) + week),
+        teamFeedbackStrongPoints: `Na semana ${week + 1}, a equipe destacou ${team.strongPoint}. Os exemplos apresentados ajudaram a conectar a discussão às necessidades reais dos usuários.`,
+        teamFeedbackImprovements: `A equipe precisa aprofundar ${team.improvement}. Faltam critérios objetivos para comparar o resultado do próximo teste com a hipótese inicial.`,
+        agreedNextSteps: `Até a próxima sessão, ${team.nextStep}. A equipe compartilhará as evidências, o responsável e o prazo de cada entrega.`,
+        mentorQualitativeAssessment: `${team.assessment}. Nesta sessão, o mentor recomendou reduzir o escopo do experimento e documentar os aprendizados antes da próxima decisão.`,
+      };
+    }),
+  );
+}
+
+function matchesLegacySession(actual: SessionRow, expected: ReturnType<typeof legacySessionPayloads>[number]): boolean {
+  return actual.teamId === expected.teamId &&
+    actual.mentorId === expected.mentorId &&
+    actual.sessionType === expected.sessionType &&
+    actual.teamNps === expected.teamNps &&
+    actual.teamActionability === expected.teamActionability &&
+    actual.mentorCommitment === expected.mentorCommitment &&
+    actual.mentorTraction === expected.mentorTraction &&
+    actual.teamFeedbackStrongPoints === expected.teamFeedbackStrongPoints &&
+    actual.teamFeedbackImprovements === expected.teamFeedbackImprovements &&
+    actual.agreedNextSteps === expected.agreedNextSteps &&
+    actual.mentorQualitativeAssessment === expected.mentorQualitativeAssessment;
+}
+
+function matchesLegacyDemoDataset(
+  mentors: MentorRow[],
+  teams: TeamRow[],
+  sessions: SessionRow[],
+  students: StudentRow[],
+): boolean {
+  if (
+    mentors.length !== legacyDemoMentors.length ||
+    teams.length !== legacyDemoTeams.length ||
+    sessions.length !== legacyDemoTeams.length * 3 ||
+    students.length !== 0
+  ) return false;
+
+  const mentorIdByName = new Map(mentors.map((mentor): [string, number] => [mentor.name, mentor.id]));
+  for (const expected of legacyDemoMentors) {
+    const actual = mentors.find((mentor) => mentor.name === expected.name);
+    if (
+      !actual ||
+      actual.email !== expected.email ||
+      actual.expertiseArea !== expected.expertiseArea ||
+      actual.mentorType !== expected.mentorType
+    ) return false;
+  }
+
+  const teamIdByName = new Map(teams.map((team): [string, number] => [team.name, team.id]));
+  for (const [index, expected] of legacyDemoTeams.entries()) {
+    const actual = teams.find((team) => team.name === expected.name);
+    if (
+      !actual ||
+      actual.mainMentorId !== mentorIdByName.get(legacyDemoMentors[index].name) ||
+      actual.pitchSummary !== expected.pitchSummary ||
+      actual.currentStage !== expected.currentStage
+    ) return false;
+  }
+
+  // Match every generated feedback/score/mentor combination, not just row counts or names.
+  // Date and identity columns vary between installations and are not seed identifiers.
+  const unmatched = legacySessionPayloads(mentorIdByName, teamIdByName);
+  for (const session of sessions) {
+    const index = unmatched.findIndex((expected) => matchesLegacySession(session, expected));
+    if (index === -1) return false;
+    unmatched.splice(index, 1);
+  }
+  return unmatched.length === 0;
 }
 
 export async function seedDatabase(): Promise<void> {
-  const seeded = await db.transaction(async (tx) => {
-    // The lock prevents two simultaneous server starts from seeding the same empty database.
+  const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(732941)`);
 
-    // A transaction uses one PostgreSQL client, so queries must be awaited in order.
-    const [mentorCount] = await tx.select({ total: count() }).from(mentorsTable);
-    const [teamCount] = await tx.select({ total: count() }).from(teamsTable);
-    const [sessionCount] = await tx.select({ total: count() }).from(mentoringSessionsTable);
+    // A transaction uses one PostgreSQL client, so keep queries sequential.
+    const mentors = await tx.select().from(mentorsTable);
+    const teams = await tx.select().from(teamsTable);
+    const sessions = await tx.select().from(mentoringSessionsTable);
+    const students = await tx.select().from(studentsTable);
 
-    if (mentorCount.total || teamCount.total || sessionCount.total) return false;
+    if (matchesOfficialDataset(mentors, teams, students)) return "already-official";
+
+    if (
+      mentors.length !== 0 ||
+      teams.length !== 0 ||
+      sessions.length !== 0 ||
+      students.length !== 0
+    ) {
+      if (!matchesLegacyDemoDataset(mentors, teams, sessions, students)) {
+        // Do not replace unknown records or prevent an otherwise healthy API from starting.
+        return "unrecognized";
+      }
+
+      await tx.delete(mentoringSessionsTable).where(inArray(mentoringSessionsTable.id, sessions.map(({ id }) => id)));
+      await tx.delete(teamsTable).where(inArray(teamsTable.id, teams.map(({ id }) => id)));
+      await tx.delete(mentorsTable).where(inArray(mentorsTable.id, mentors.map(({ id }) => id)));
+    }
 
     const insertedMentors = await tx
       .insert(mentorsTable)
-      .values(mentors.map((mentor) => insertMentorSchema.parse(mentor)))
+      .values(officialTeams.map(({ mentor }) => insertMentorSchema.parse({
+        name: mentor,
+        email: null,
+        expertiseArea: null,
+        mentorType: null,
+      })))
       .returning();
+    const mentorIdByName = new Map(insertedMentors.map((mentor): [string, number] => [mentor.name, mentor.id]));
 
     const insertedTeams = await tx
       .insert(teamsTable)
-      .values(
-        teams.map((team, index) =>
-          insertTeamSchema.parse({
-            name: team.name,
-            pitchSummary: team.pitchSummary,
-            mainMentorId: insertedMentors[index].id,
-            currentStage: team.currentStage,
-          }),
-        ),
-      )
+      .values(officialTeams.map((team) => insertTeamSchema.parse({
+        name: team.name,
+        pitchSummary: null,
+        currentStage: null,
+        mainMentorId: mentorIdByName.get(team.mentor),
+      })))
       .returning();
+    const teamIdByName = new Map(insertedTeams.map((team): [string, number] => [team.name, team.id]));
 
-    const sessions = teams.flatMap((team, index) =>
-      [0, 1, 2].map((week) => {
-        const external = week === 2 && index % 2 === 0;
-        const sessionType = week === 0 ? "principal" : external ? "externo" : week === 1 ? "transversal" : "principal";
-        const mentorId = external
-          ? insertedMentors[8 + ((index / 2) % 2)].id
-          : week === 1
-            ? insertedMentors[(index + 2) % 8].id
-            : insertedMentors[index].id;
-
-        return insertMentoringSessionSchema.parse({
-          teamId: insertedTeams[index].id,
-          mentorId,
-          sessionType,
-          sessionDate: dateDaysAgo(17 - week * 7 + (index % 3)),
-          teamNps: Math.min(10, 6 + (index % 3) + week),
-          teamActionability: Math.min(10, 5 + (index % 4) + week),
-          mentorCommitment: Math.min(10, 6 + ((index + 1) % 3) + week),
-          mentorTraction: Math.min(10, 5 + ((index + 2) % 4) + week),
-          teamFeedbackStrongPoints: `Na semana ${week + 1}, a equipe destacou ${team.strongPoint}. Os exemplos apresentados ajudaram a conectar a discussão às necessidades reais dos usuários.`,
-          teamFeedbackImprovements: `A equipe precisa aprofundar ${team.improvement}. Faltam critérios objetivos para comparar o resultado do próximo teste com a hipótese inicial.`,
-          agreedNextSteps: `Até a próxima sessão, ${team.nextStep}. A equipe compartilhará as evidências, o responsável e o prazo de cada entrega.`,
-          mentorQualitativeAssessment: `${team.assessment}. Nesta sessão, o mentor recomendou reduzir o escopo do experimento e documentar os aprendizados antes da próxima decisão.`,
-        });
-      }),
+    await tx.insert(studentsTable).values(
+      officialTeams.flatMap((team) =>
+        team.students.map((name, sortOrder) => insertStudentSchema.parse({
+          teamId: teamIdByName.get(team.name),
+          name,
+          sortOrder,
+        })),
+      ),
     );
-
-    await tx.insert(mentoringSessionsTable).values(sessions);
-    return true;
+    return mentors.length === 0 ? "seeded" : "replaced-demo";
   });
 
-  if (seeded) {
-    logger.info({ mentors: mentors.length, teams: teams.length, sessions: teams.length * 3 }, "Initial mentoring data seeded");
+  if (result === "unrecognized") {
+    logger.warn("Existing mentoring data is not the known demo seed; import skipped and all records preserved");
+  } else if (result === "already-official") {
+    logger.info("Official PIBEP 2026 data already exists; seed skipped");
   } else {
-    logger.info("Mentoring data already exists; initial seed skipped");
+    logger.info({
+      mentors: officialTeams.length,
+      teams: officialTeams.length,
+      students: officialTeams.reduce((total, team) => total + team.students.length, 0),
+      removedDemoSessions: result === "replaced-demo" ? legacyDemoTeams.length * 3 : 0,
+    }, "Official PIBEP 2026 mentoring data ready");
   }
 }

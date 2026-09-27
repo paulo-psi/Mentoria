@@ -212,7 +212,7 @@ export const getGetTeamsUrl = () => {
 }
 
 /**
- * Returns each team with its lead mentor and completed session count.
+ * Returns each team with its lead mentor, ordered students, and session count.
  * @summary List mentoring teams
  */
 export const getTeams = async ( options?: Parameters<typeof customFetch>[1]): Promise<Team[]> => {

@@ -5,10 +5,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import {
-  CalendarCheck2,
   CheckCircle2,
   CircleAlert,
-  Mail,
   RefreshCw,
   Search,
   UsersRound,
@@ -57,7 +55,7 @@ function Home() {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
     if (!normalizedSearch) return source;
     return source.filter((team) =>
-      [team.name, team.pitchSummary, team.currentStage, team.mainMentor.name]
+      [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)]
         .join(' ')
         .toLocaleLowerCase('pt-BR')
         .includes(normalizedSearch),
@@ -69,6 +67,7 @@ function Home() {
     apiAvailable &&
     health.data?.status === 'ok' &&
     health.data.database === 'connected';
+  const studentCount = teams.data?.reduce((total, team) => total + team.students.length, 0) ?? 0;
 
   const refreshAll = () => {
     void healthCheck.refetch();
@@ -125,7 +124,7 @@ function Home() {
             Equipes
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Listagem inicial de equipes, mentores principais e sessões cadastradas no banco.
+            Relação oficial de equipes, mentores e estudantes do PIBEP 2026 · 16ª edição.
           </p>
         </div>
 
@@ -133,10 +132,14 @@ function Home() {
             <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
               <div>
                 <div className="mb-2 font-mono-ui text-[10px] uppercase tracking-[0.17em] text-muted-foreground">
-                  dados de teste
+                  PIBEP 2026 · 16ª edição
                 </div>
                 <h2 className="font-display text-2xl tracking-[-0.035em]">
-                  {teams.isLoading ? 'Carregando equipes…' : `${teams.data?.length ?? 0} equipes cadastradas`}
+                  {teams.isLoading
+                    ? 'Carregando equipes…'
+                    : teams.isError
+                      ? 'Equipes indisponíveis'
+                      : `${teams.data?.length ?? 0} equipes · ${studentCount} estudantes`}
                 </h2>
               </div>
               <label className="relative block w-full sm:w-[242px]">
@@ -146,9 +149,10 @@ function Home() {
                 />
                 <input
                   className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground/75 focus:ring-2 focus:ring-primary/20"
+                  aria-label="Buscar equipe, mentor ou estudante"
                   data-testid="input-buscar-equipes"
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar equipe ou mentor"
+                  placeholder="Buscar equipe, mentor ou estudante"
                   type="search"
                   value={search}
                 />
@@ -181,84 +185,42 @@ function TeamCard({
   team: {
     id: number;
     name: string;
-    pitchSummary: string;
-    currentStage: string;
-    createdAt: string;
     mainMentor: {
       name: string;
-      email: string;
-      expertiseArea: string;
-      mentorType: string;
     };
-    sessionCount: number;
+    students: { id: number; name: string; sortOrder: number }[];
   };
   index: number;
 }) {
-  const initials = team.mainMentor.name
-    .split(' ')
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-  const created = new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(new Date(team.createdAt));
-  const stageTone =
-    team.currentStage.toLocaleLowerCase('pt-BR').includes('valida')
-      ? 'bg-[#f6e4bb] text-[#85632a]'
-      : team.currentStage.toLocaleLowerCase('pt-BR').includes('escala')
-        ? 'bg-[#dcebe3] text-[#2d6958]'
-        : 'bg-[#e7e5d9] text-[#5d665b]';
-
   return (
     <article
       className={`animate-rise-in delay-${Math.min(index + 3, 5)} group rounded-2xl border border-border bg-card p-5 transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-27px_hsl(184_26%_17%_/_0.6)]`}
       data-testid={`card-equipe-${team.id}`}
     >
-      <div className="flex items-start justify-between gap-5">
+      <div className="flex items-start gap-3 border-b border-border/70 pb-4">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Waypoints size={17} />
+        </span>
         <div className="min-w-0">
-          <div className="mb-3 flex items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 font-mono-ui text-[9px] uppercase tracking-[0.08em] ${stageTone}`} data-testid={`status-estagio-${team.id}`}>
-              {team.currentStage}
-            </span>
-            <span className="font-mono-ui text-[9px] text-muted-foreground">#{String(team.id).padStart(2, '0')}</span>
-          </div>
-          <h3 className="truncate font-display text-[25px] tracking-[-0.04em]" data-testid={`text-equipe-${team.id}`}>
+          <h3 className="font-display text-[25px] tracking-[-0.04em]" data-testid={`text-equipe-${team.id}`}>
             {team.name}
           </h3>
-          <p className="mt-2 line-clamp-2 max-w-[470px] text-xs leading-5 text-muted-foreground" data-testid={`text-pitch-${team.id}`}>
-            {team.pitchSummary}
+          <p className="mt-1 text-xs leading-5 text-muted-foreground" data-testid={`text-mentor-${team.id}`}>
+            Mentor responsável: <span className="font-semibold text-foreground">{team.mainMentor.name}</span>
           </p>
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-[1fr_auto] items-end gap-4 border-t border-border/70 pt-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 font-display text-xs font-semibold text-primary" data-testid={`avatar-mentor-${team.id}`}>
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold" data-testid={`text-mentor-${team.id}`}>{team.mainMentor.name}</p>
-            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span className="truncate">{team.mainMentor.expertiseArea}</span>
-              <span className="text-border">·</span>
-              <span className="shrink-0 capitalize">{team.mainMentor.mentorType}</span>
-            </div>
-          </div>
+      <div className="mt-4">
+        <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          <UsersRound size={13} />
+          Estudantes ({team.students.length})
         </div>
-        <div className="text-right">
-          <div className="flex items-center justify-end gap-1.5 text-primary">
-            <CalendarCheck2 size={14} />
-            <span className="font-display text-xl tracking-[-0.04em]" data-testid={`text-sessoes-${team.id}`}>{team.sessionCount}</span>
-          </div>
-          <p className="mt-1 font-mono-ui text-[9px] uppercase tracking-[0.08em] text-muted-foreground">sessões</p>
-        </div>
-      </div>
-      <div className="mt-4 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1.5"><Mail size={12} /> {team.mainMentor.email}</span>
-        <span className="font-mono-ui text-[9px]">{created}</span>
+        <ul className="list-disc space-y-1.5 pl-5 text-xs leading-5 text-foreground/85" data-testid={`lista-estudantes-${team.id}`}>
+          {team.students.map((student) => (
+            <li key={student.id}>{student.name}</li>
+          ))}
+        </ul>
       </div>
     </article>
   );
@@ -308,7 +270,7 @@ function EmptyState({ hasSearch, onClear }: { hasSearch: boolean; onClear: () =>
         {hasSearch ? 'Nenhuma equipe encontrada.' : 'Nenhuma equipe neste ciclo.'}
       </h3>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        {hasSearch ? 'Tente outro nome, etapa ou mentor.' : 'Quando houver equipes, elas aparecerão aqui.'}
+         {hasSearch ? 'Tente outro nome de equipe, mentor ou estudante.' : 'Quando houver equipes, elas aparecerão aqui.'}
       </p>
       {hasSearch && (
         <button className="mt-5 text-xs font-semibold text-primary underline underline-offset-4" data-testid="button-limpar-busca" onClick={onClear} type="button">

@@ -37,7 +37,10 @@ export interface HealthStatus {
   database: HealthStatusDatabase;
 }
 
-export type MentorMentorType = typeof MentorMentorType[keyof typeof MentorMentorType];
+/**
+ * @nullable
+ */
+export type MentorMentorType = typeof MentorMentorType[keyof typeof MentorMentorType] | null;
 
 
 export const MentorMentorType = {
@@ -48,18 +51,31 @@ export const MentorMentorType = {
 export interface Mentor {
   id: number;
   name: string;
-  email: string;
-  expertiseArea: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  expertiseArea: string | null;
+  /** @nullable */
   mentorType: MentorMentorType;
+}
+
+export interface Student {
+  id: number;
+  name: string;
+  /** @minimum 0 */
+  sortOrder: number;
 }
 
 export interface Team {
   id: number;
   name: string;
-  pitchSummary: string;
-  currentStage: string;
+  /** @nullable */
+  pitchSummary: string | null;
+  /** @nullable */
+  currentStage: string | null;
   createdAt: string;
   mainMentor: Mentor;
+  students: Student[];
   /** @minimum 0 */
   sessionCount: number;
 }
