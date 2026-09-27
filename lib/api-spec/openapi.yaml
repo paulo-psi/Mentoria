@@ -10,27 +10,122 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: teams
+    description: Mentoring teams
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
+      summary: Server health check
+      description: Returns whether the API process is available
       responses:
         "200":
           description: Healthy
           content:
             application/json:
               schema:
+                $ref: "#/components/schemas/ServerStatus"
+  /health:
+    get:
+      operationId: getHealth
+      tags: [health]
+      summary: Check API and database connection
+      responses:
+        "200":
+          description: API and database are connected
+          content:
+            application/json:
+              schema:
                 $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /teams:
+    get:
+      operationId: getTeams
+      tags: [teams]
+      summary: List mentoring teams
+      description: Returns each team with its lead mentor and completed session count.
+      responses:
+        "200":
+          description: Teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Team"
 components:
   schemas:
+    ServerStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok]
+      required:
+        - status
     HealthStatus:
       type: object
       properties:
         status:
           type: string
+          enum: [ok, error]
+        database:
+          type: string
+          enum: [connected, disconnected]
       required:
         - status
+        - database
+    Mentor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        expertiseArea:
+          type: string
+        mentorType:
+          type: string
+          enum: [interno, externo]
+      required:
+        - id
+        - name
+        - email
+        - expertiseArea
+        - mentorType
+    Team:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        pitchSummary:
+          type: string
+        currentStage:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        mainMentor:
+          $ref: "#/components/schemas/Mentor"
+        sessionCount:
+          type: integer
+          minimum: 0
+      required:
+        - id
+        - name
+        - pitchSummary
+        - currentStage
+        - createdAt
+        - mainMentor
+        - sessionCount
 

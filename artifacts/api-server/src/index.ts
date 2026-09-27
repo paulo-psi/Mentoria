@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { seedDatabase } from "./seed";
 
 const rawPort = process.env["PORT"];
 
@@ -15,11 +16,20 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+async function start(): Promise<void> {
+  await seedDatabase();
 
-  logger.info({ port }, "Server listening");
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+
+    logger.info({ port }, "Server listening");
+  });
+}
+
+start().catch((err: unknown) => {
+  logger.fatal({ err }, "Unable to initialize mentoring database");
+  process.exit(1);
 });

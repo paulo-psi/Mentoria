@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Hub de Mentorias"
+description = "A lightweight mentoring hub for tracking eight startup teams, their lead mentors, and recent mentoring sessions, with a clear connection check against its API."
+version = "1.0.0"
+id = "artifacts/hub-mentorias"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21964
+
+[services.development]
+run = "pnpm --filter @workspace/hub-mentorias run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/hub-mentorias", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/hub-mentorias/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21964"
+BASE_PATH = "/"
