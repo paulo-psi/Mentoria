@@ -1,0 +1,74 @@
+Considere os dados abaixo como a relação oficial entre mentores, equipes e integrantes do PIBEP 2026, 16ª edição.
+
+Use exatamente os nomes informados, preservando acentos, maiúsculas, minúsculas e a associação entre cada mentor e sua respectiva equipe.
+
+Dados:
+
+1. Mentor(a): Luiz Fernando Bianchini
+   Equipe: Anchor
+   Integrantes:
+   - Izabela Lourenço
+   - Lilian Lima Waszak
+   - Victoria Alcantara
+
+2. Mentor(a): Jefferson Pedro Cunha
+   Equipe: Hardec Agro
+   Integrantes:
+   - Ester Borges da Silva
+   - Pedro Hartmann Biasi
+   - Raphael Descardecci Miranda
+   - Vinícius Seguro
+
+3. Mentor(a): Henrique Ceciliato de Carvalho
+   Equipe: Norman
+   Integrantes:
+   - Andrea Eric de Paula Souza
+   - Carlos Eduardo Amaral
+   - Otavio Vanzo
+
+4. Mentor(a): Dalton Alexandre Kai
+   Equipe: Nock
+   Integrantes:
+   - Alisson Ayres Pereira Martins Silva
+   - Carlos Leonardo Garcia Pscheidt
+   - Gabriel Henrique do Carmo Silva
+   - Pedro Henrique Sudário da Silva
+
+5. Mentor(a): Kelly Mazutti Monteiro
+   Equipe: PlantonIQ
+   Integrantes:
+   - Alitheia Karla da Silva
+   - Fátima Luciana Costa Luz
+   - Victória Luzia Antunes Grothe
+
+6. Mentor(a): Evandro Jackson Redivo Nava
+   Equipe: Integremente
+   Integrantes:
+   - Isadora Pedralli
+   - Ketlin Gabriela Pereira Leal
+   - Marcus de Melo Moreira
+   - Rafaela do Nascimento
+
+7. Mentor(a): Paulo D Assumpcao Zaniol
+   Equipe: Kaden
+   Integrantes:
+   - Gisleine Barbosa Alves de Lima
+   - Vinícius Laertes Carvalho
+   - Rafael Antonio Paduan dos Santos
+
+8. Mentor(a): Etiane Caloy Bovkalovski
+   Equipe: Reglos
+   Integrantes:
+   - Alexander Godoi Siemens
+   - Flavia Veronica Araque Dávila
+   - Rafael de Freitas Brandão
+   - Victória Novak Contador
+   - Vitor Henrique Juliatto
+
+Ao responder perguntas sobre esses dados:
+- Identifique a equipe pelo nome.
+- Identifique o mentor responsável.
+- Liste os integrantes quando solicitado.
+- Não associe integrantes a outra equipe.
+- Não altere a grafia dos nomes.
+- Se a informação não estiver nos dados, informe que ela não foi fornecida.
