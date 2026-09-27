@@ -50,7 +50,7 @@ function createHarness(mode) {
       }
       state.fixtureConnectAttempts += 1;
       state.fixtureConnectedDatabase = this.database;
-      if (mode === "fixture-connect") {
+      if (mode === "fixture-connect" || mode === "fixture-connect-and-end") {
         throw new Error("simulated fixture connection failure");
       }
     }
@@ -128,6 +128,9 @@ function createHarness(mode) {
       else state.fixtureEnded = true;
       if (this.isAdmin && (mode === "admin-end" || mode === "multiple-cleanup-and-admin-end-failures")) {
         throw new Error("simulated administrative connection close failure");
+      }
+      if (!this.isAdmin && mode === "fixture-connect-and-end") {
+        throw new Error("simulated fixture connection close failure");
       }
     }
   }
@@ -292,6 +295,29 @@ test("fixture connection failure removes the generated database and temporary fi
   assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL is not applied before connecting");
   assert.equal(harness.state.fixtureEnded, true, "the fixture client is closed after the failed connection");
   assert.equal(harness.state.runTestProcess, false, "the roster test process does not run");
+  await assertResourcesRemoved(harness.state);
+});
+
+test("fixture setup and close failures are both reported before administrative cleanup", async () => {
+  const harness = createHarness("fixture-connect-and-end");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.message, /Fixture setup failed and closing its connection also failed/);
+    assert.equal(error.errors.length, 2);
+    assert.match(error.errors[0].message, /simulated fixture connection failure/);
+    assert.match(error.errors[1].message, /simulated fixture connection close failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1);
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.fixtureEnded, true, "fixture close was attempted");
+  assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+  assert.equal(harness.state.terminateConnectionAttempts, 1);
+  assert.equal(harness.state.dropDatabaseAttempts, 1);
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
   await assertResourcesRemoved(harness.state);
 });
 
