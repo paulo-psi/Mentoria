@@ -44,6 +44,13 @@ import {
 
 const queryClient = new QueryClient();
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
+}
+
 function Home() {
   const [search, setSearch] = useState('');
   const healthCheck = useHealthCheck({
@@ -67,13 +74,12 @@ function Home() {
 
   const filteredTeams = useMemo(() => {
     const source = teams.data ?? [];
-    const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
+    const normalizedSearch = normalizeSearchText(search.trim());
     if (!normalizedSearch) return source;
     return source.filter((team) =>
-      [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)]
-        .join(' ')
-        .toLocaleLowerCase('pt-BR')
-        .includes(normalizedSearch),
+      normalizeSearchText(
+        [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].join(' '),
+      ).includes(normalizedSearch),
     );
   }, [search, teams.data]);
 
