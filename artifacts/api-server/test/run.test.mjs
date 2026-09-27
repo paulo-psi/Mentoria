@@ -20,6 +20,8 @@ function createHarness(mode) {
     fixtureEnded: false,
     adminEnded: false,
     runTestProcess: false,
+    testProcessStartAttempts: 0,
+    bundleAttempts: 0,
     tempDirectories: [],
     tempDirectoryRemovalAttempts: 0,
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
@@ -133,6 +135,10 @@ function createHarness(mode) {
     if (args.includes("generate")) {
       return { status: mode === "generate-schema" ? 3 : 0 };
     }
+    state.testProcessStartAttempts += 1;
+    if (mode === "test-process-start-error") {
+      return { error: new Error("simulated test process start failure") };
+    }
     state.runTestProcess = true;
     if (mode === "roster-and-drop-failure") {
       throw new Error("simulated roster test execution failure");
@@ -145,7 +151,14 @@ function createHarness(mode) {
     };
   };
 
-  return { state, FakeClient, fs, spawn };
+  const bundle = async () => {
+    state.bundleAttempts += 1;
+    if (mode === "bundle-error") {
+      throw new Error("simulated roster test bundle failure");
+    }
+  };
+
+  return { state, FakeClient, fs, spawn, bundle };
 }
 
 async function assertResourcesRemoved(state) {
@@ -161,7 +174,7 @@ async function runWith(harness, envOverrides = {}) {
     env: { DATABASE_URL: sourceUrl, NODE_ENV: "development", ...envOverrides },
     Client: harness.FakeClient,
     spawn: harness.spawn,
-    bundle: async () => {},
+    bundle: harness.bundle,
     fs: harness.fs,
     tempDirectory: tmpdir(),
   });
@@ -241,6 +254,28 @@ test("test process failure removes the generated database and temporary files", 
 
   assert.equal(harness.state.fixtureQueries.length, 1);
   assert.equal(harness.state.runTestProcess, true);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("test bundling failure prevents process start and removes all resources", async () => {
+  const harness = createHarness("bundle-error");
+
+  await assert.rejects(runWith(harness), /simulated roster test bundle failure/);
+
+  assert.equal(harness.state.bundleAttempts, 1, "the test bundle was attempted");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "the test process is not started after bundling fails");
+  assert.equal(harness.state.runTestProcess, false);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("test process start failure is reported and removes all resources", async () => {
+  const harness = createHarness("test-process-start-error");
+
+  await assert.rejects(runWith(harness), /simulated test process start failure/);
+
+  assert.equal(harness.state.bundleAttempts, 1, "the test bundle was created before starting the process");
+  assert.equal(harness.state.testProcessStartAttempts, 1, "starting the test process was attempted");
+  assert.equal(harness.state.runTestProcess, false, "the process did not start successfully");
   await assertResourcesRemoved(harness.state);
 });
 
