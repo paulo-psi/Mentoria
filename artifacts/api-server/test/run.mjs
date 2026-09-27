@@ -123,6 +123,14 @@ globalThis.require = __createRequire(import.meta.url);`,
       stdio: "inherit",
     });
     if (testProcess.error) throw testProcess.error;
+    if (testProcess.signal) {
+      const error = new Error(
+        `Roster test process was terminated by signal ${testProcess.signal}.`,
+      );
+      error.exitCode = testProcess.status ?? 1;
+      error.signal = testProcess.signal;
+      throw error;
+    }
     result = testProcess.status === 0 ? 0 : testProcess.status ?? 1;
   } catch (error) {
     operationError = error;

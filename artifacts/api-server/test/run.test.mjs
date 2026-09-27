@@ -144,6 +144,9 @@ function createHarness(mode) {
     if (mode === "roster-and-drop-failure") {
       throw new Error("simulated roster test execution failure");
     }
+    if (mode === "signal-test-process") {
+      return { status: null, signal: "SIGTERM" };
+    }
     return {
       status:
         mode === "run-tests" || mode === "nonzero-roster-and-drop-failure"
@@ -255,6 +258,29 @@ test("test process failure removes the generated database and temporary files", 
 
   assert.equal(harness.state.fixtureQueries.length, 1);
   assert.equal(harness.state.runTestProcess, true);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("successful test process returns zero and removes all resources", async () => {
+  const harness = createHarness("successful-test-process");
+
+  assert.equal(await runWith(harness), 0);
+
+  assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
+  await assertResourcesRemoved(harness.state);
+});
+
+test("test process signal is reported with a nonzero exit code and all resources removed", async () => {
+  const harness = createHarness("signal-test-process");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.match(error.message, /terminated by signal SIGTERM/);
+    assert.equal(error.signal, "SIGTERM");
+    assert.equal(error.exitCode, 1);
+    return true;
+  });
+
+  assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
   await assertResourcesRemoved(harness.state);
 });
 
