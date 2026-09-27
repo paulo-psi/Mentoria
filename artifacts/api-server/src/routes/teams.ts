@@ -2,10 +2,11 @@ import { asc, count, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { GetTeamsResponse } from "@workspace/api-zod";
 import { db, mentorsTable, mentoringSessionsTable, studentsTable, teamsTable } from "@workspace/db";
+import { requireApprovedUser } from "../middlewares/requireApprovedUser";
 
 const router: IRouter = Router();
 
-router.get("/teams", async (_req, res): Promise<void> => {
+router.get("/teams", requireApprovedUser, async (_req, res): Promise<void> => {
   const rows = await db
     .select({
       id: teamsTable.id,

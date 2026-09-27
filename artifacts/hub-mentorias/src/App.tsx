@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { ClerkProvider, Show } from '@clerk/react';
+import { ptBR } from '@clerk/localizations';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -22,10 +24,23 @@ import {
 } from '@workspace/api-client-react';
 import {
   Route,
+  Redirect,
   Switch,
   useLocation,
   Router as WouterRouter,
 } from 'wouter';
+import {
+  basePath,
+  clerkAppearance,
+  clerkProxyUrl,
+  clerkPubKey,
+  ClerkQueryClientCacheInvalidator,
+  LogoutButton,
+  PublicHome,
+  SignInPage,
+  SignUpPage,
+  stripBase,
+} from './auth';
 
 const queryClient = new QueryClient();
 
@@ -68,6 +83,7 @@ function Home() {
     health.data?.status === 'ok' &&
     health.data.database === 'connected';
   const studentCount = teams.data?.reduce((total, team) => total + team.students.length, 0) ?? 0;
+  const accessDenied = teams.error?.status === 403;
 
   const refreshAll = () => {
     void healthCheck.refetch();
@@ -85,18 +101,21 @@ function Home() {
             </span>
             <span className="min-w-0 font-display text-lg leading-tight sm:text-xl">HUB de Mentorias PIBEP PUCPR</span>
           </div>
-          <button
-            className="flex shrink-0 items-center gap-2 self-end rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted sm:self-auto"
-            data-testid="button-atualizar"
-            onClick={refreshAll}
-            type="button"
-          >
-            <RefreshCw
-              className={health.isFetching || teams.isFetching ? 'animate-spin' : ''}
-              size={14}
-            />
-            Atualizar
-          </button>
+          <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+            <button
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted"
+              data-testid="button-atualizar"
+              onClick={refreshAll}
+              type="button"
+            >
+              <RefreshCw
+                className={health.isFetching || teams.isFetching ? 'animate-spin' : ''}
+                size={14}
+              />
+              Atualizar
+            </button>
+            <LogoutButton />
+          </div>
         </div>
       </header>
 
@@ -138,7 +157,7 @@ function Home() {
                   {teams.isLoading
                     ? 'Carregando equipes…'
                     : teams.isError
-                      ? 'Equipes indisponíveis'
+                      ? accessDenied ? 'Acesso pendente' : 'Equipes indisponíveis'
                       : `${teams.data?.length ?? 0} equipes · ${studentCount} estudantes`}
                 </h2>
               </div>
@@ -162,7 +181,7 @@ function Home() {
             {teams.isLoading ? (
               <TeamSkeletonGrid />
             ) : teams.isError ? (
-              <ErrorState onRetry={refreshAll} />
+              accessDenied ? <AccessDeniedState /> : <ErrorState onRetry={refreshAll} />
             ) : filteredTeams.length === 0 ? (
               <EmptyState hasSearch={Boolean(search)} onClear={() => setSearch('')} />
             ) : (
@@ -262,6 +281,19 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function AccessDeniedState() {
+  return (
+    <div className="rounded-2xl border border-border bg-card px-6 py-12 text-center" data-testid="state-acesso-pendente">
+      <CircleAlert className="mx-auto mb-4 text-primary" size={25} />
+      <h3 className="font-display text-2xl tracking-[-0.03em]">Acesso ainda não aprovado</h3>
+      <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-muted-foreground">
+        Peça ao responsável pelo Hub para incluir seu e-mail entre os autorizados.
+        Criar uma conta não libera a relação automaticamente.
+      </p>
+    </div>
+  );
+}
+
 function EmptyState({ hasSearch, onClear }: { hasSearch: boolean; onClear: () => void }) {
   return (
     <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center" data-testid="state-vazio-equipes">
@@ -287,10 +319,31 @@ function Router() {
     // survives a page crash.
     <RoutedErrorBoundary>
       <Switch>
-        <Route path="/" component={Home} />
+        <Route path="/" component={HomeRedirect} />
+        <Route path="/user-portal" component={UserPortal} />
+        <Route path="/sign-in/*?" component={SignInPage} />
+        <Route path="/sign-up/*?" component={SignUpPage} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
+  );
+}
+
+function HomeRedirect() {
+  return (
+    <>
+      <Show when="signed-in"><Redirect to="/user-portal" /></Show>
+      <Show when="signed-out"><PublicHome /></Show>
+    </>
+  );
+}
+
+function UserPortal() {
+  return (
+    <>
+      <Show when="signed-in"><Home /></Show>
+      <Show when="signed-out"><Redirect to="/" /></Show>
+    </>
   );
 }
 
@@ -299,16 +352,38 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
+function ClerkProviderWithRoutes() {
+  const [, setLocation] = useLocation();
+
+  return (
+    <ClerkProvider
+      publishableKey={clerkPubKey}
+      proxyUrl={clerkProxyUrl}
+      appearance={clerkAppearance}
+      signInUrl={`${basePath}/sign-in`}
+      signUpUrl={`${basePath}/sign-up`}
+      signInFallbackRedirectUrl={`${basePath}/user-portal`}
+      signUpFallbackRedirectUrl={`${basePath}/user-portal`}
+      localization={ptBR}
+      routerPush={(to) => setLocation(stripBase(to))}
+      routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
+    >
+      <QueryClientProvider client={queryClient}>
+        <ClerkQueryClientCacheInvalidator />
+        <TooltipProvider>
+          <Router />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ClerkProvider>
+  );
+}
+
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <WouterRouter base={basePath}>
+      <ClerkProviderWithRoutes />
+    </WouterRouter>
   );
 }
 
