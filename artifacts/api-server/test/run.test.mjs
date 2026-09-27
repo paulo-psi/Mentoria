@@ -9,6 +9,7 @@ const sourceUrl = "postgres://roster_test:local-only@127.0.0.1:5432/source_db";
 
 function createHarness(mode) {
   const state = {
+    clientCreations: 0,
     createdDatabases: [],
     droppedDatabases: [],
     terminateConnectionAttempts: 0,
@@ -17,12 +18,14 @@ function createHarness(mode) {
     adminEnded: false,
     runTestProcess: false,
     tempDirectories: [],
+    sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
   };
 
   class FakeClient {
     constructor({ connectionString }) {
+      state.clientCreations += 1;
       this.database = new URL(connectionString).pathname.slice(1);
-      this.isAdmin = this.database === "source_db";
+      this.isAdmin = state.clientCreations === 1;
     }
 
     async connect() {}
@@ -30,7 +33,12 @@ function createHarness(mode) {
     async query(sql) {
       if (this.isAdmin) {
         if (sql.startsWith("select current_database()")) {
-          return { rows: [{ current_database: "source_db", rolcreatedb: true }] };
+          return {
+            rows: [{
+              current_database: state.sourceDatabase,
+              rolcreatedb: mode !== "missing-createdb",
+            }],
+          };
         }
         const create = sql.match(/^CREATE DATABASE "([^"]+)"$/);
         if (create) {
@@ -101,15 +109,27 @@ async function assertResourcesRemoved(state) {
   await assert.rejects(access(state.tempDirectories[0]), { code: "ENOENT" });
 }
 
-async function runWith(harness) {
+async function runWith(harness, envOverrides = {}) {
   return runRosterTests({
-    env: { DATABASE_URL: sourceUrl, NODE_ENV: "development" },
+    env: { DATABASE_URL: sourceUrl, NODE_ENV: "development", ...envOverrides },
     Client: harness.FakeClient,
     spawn: harness.spawn,
     bundle: async () => {},
     fs: harness.fs,
     tempDirectory: tmpdir(),
   });
+}
+
+function assertNoDatabaseOrFixturesWereCreated(state) {
+  assert.deepEqual(state.createdDatabases, [], "an unsafe source must not create a test database");
+  assert.deepEqual(state.fixtureQueries, [], "an unsafe source must not apply fixture SQL");
+  assert.equal(state.runTestProcess, false, "the roster test process must not run");
+}
+
+async function assertEarlySafetyGate(harness) {
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 0, "the gate must run before creating a database client");
+  assert.equal(harness.state.tempDirectories.length, 0, "the gate must run before creating temporary files");
 }
 
 test("schema generation failure removes the generated database and temporary files", async () => {
@@ -161,4 +181,68 @@ test("a fixture connection to another database is rejected before fixture SQL ru
   assert.equal(harness.state.fixtureEnded, true);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
+});
+
+test("a missing database URL is rejected before opening a client or creating resources", async () => {
+  const harness = createHarness("safe");
+
+  await assert.rejects(
+    runWith(harness, { DATABASE_URL: undefined }),
+    /Roster tests require a development DATABASE_URL outside a deployment/,
+  );
+
+  await assertEarlySafetyGate(harness);
+});
+
+test("production mode is rejected before opening a client or creating resources", async () => {
+  const harness = createHarness("safe");
+
+  await assert.rejects(
+    runWith(harness, { NODE_ENV: "production" }),
+    /Roster tests require a development DATABASE_URL outside a deployment/,
+  );
+
+  await assertEarlySafetyGate(harness);
+});
+
+test("deployment mode is rejected before opening a client or creating resources", async () => {
+  const harness = createHarness("safe");
+
+  await assert.rejects(
+    runWith(harness, { REPLIT_DEPLOYMENT: "1" }),
+    /Roster tests require a development DATABASE_URL outside a deployment/,
+  );
+
+  await assertEarlySafetyGate(harness);
+});
+
+test("a source database already named as a test database is rejected before creating another database", async () => {
+  const harness = createHarness("test-database-source");
+
+  await assert.rejects(
+    runWith(harness),
+    /The development database user must have CREATEDB, and the source cannot be a test database/,
+  );
+
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the administrative source connection is opened");
+  assert.equal(harness.state.adminEnded, true);
+  assert.equal(harness.state.tempDirectories.length, 1);
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+
+test("a source user without CREATEDB is rejected before creating a database or applying fixtures", async () => {
+  const harness = createHarness("missing-createdb");
+
+  await assert.rejects(
+    runWith(harness),
+    /The development database user must have CREATEDB, and the source cannot be a test database/,
+  );
+
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the administrative source connection is opened");
+  assert.equal(harness.state.adminEnded, true);
+  assert.equal(harness.state.tempDirectories.length, 1);
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
