@@ -77,7 +77,11 @@ function createHarness(mode) {
         }
         if (sql.startsWith("SELECT pg_terminate_backend")) {
           state.terminateConnectionAttempts += 1;
-          if (mode === "terminate-connections" || mode === "multiple-cleanup-failures") {
+          if (
+            mode === "terminate-connections" ||
+            mode === "multiple-cleanup-failures" ||
+            mode === "nonzero-roster-and-multiple-cleanup-failures"
+          ) {
             throw new Error("simulated connection termination failure");
           }
           return { rows: [] };
@@ -90,6 +94,7 @@ function createHarness(mode) {
             mode === "drop-and-temp-failure" ||
             mode === "multiple-cleanup-failures" ||
             mode === "roster-and-drop-failure" ||
+            mode === "nonzero-roster-and-multiple-cleanup-failures" ||
             mode === "nonzero-roster-and-drop-failure"
           ) {
             throw new Error("simulated database drop failure");
@@ -159,7 +164,9 @@ function createHarness(mode) {
     }
     return {
       status:
-        mode === "run-tests" || mode === "nonzero-roster-and-drop-failure"
+        mode === "run-tests" ||
+        mode === "nonzero-roster-and-drop-failure" ||
+        mode === "nonzero-roster-and-multiple-cleanup-failures"
           ? 7
           : 0,
     };
@@ -374,6 +381,32 @@ test("roster test failure remains visible when administrative cleanup also fails
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-file cleanup was attempted");
   assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
   assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("nonzero roster test status and every administrative cleanup failure remain visible", async () => {
+  const harness = createHarness("nonzero-roster-and-multiple-cleanup-failures");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 3);
+    assert.equal(error.errors[0].exitCode, 7);
+    assert.match(error.errors[0].message, /exited with status 7/);
+    assert.match(error.errors[1].message, /simulated connection termination failure/);
+    assert.match(error.errors[2].message, /simulated database drop failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "connection termination was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "database removal ran despite termination failure");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory cleanup was attempted");
+  assert.equal(harness.state.clientCreations, 2, "only injected fake admin and fixture clients were created");
+  assert.equal(harness.state.adminConnectAttempts, 1, "the only admin connection was the injected fake");
+  assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was the injected fake");
+  assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
