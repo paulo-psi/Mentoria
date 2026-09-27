@@ -53,11 +53,16 @@ function createHarness(mode) {
             throw new Error("simulated security metadata query failure");
           }
           if (mode === "missing-security-row") return { rows: [] };
+          const security = {
+            current_database: state.sourceDatabase,
+            rolcreatedb: mode !== "missing-createdb",
+          };
+          if (mode === "missing-database-name") delete security.current_database;
+          if (mode === "missing-createdb-value") delete security.rolcreatedb;
+          if (mode === "invalid-database-name-type") security.current_database = null;
+          if (mode === "invalid-createdb-type") security.rolcreatedb = "true";
           return {
-            rows: [{
-              current_database: state.sourceDatabase,
-              rolcreatedb: mode !== "missing-createdb",
-            }],
+            rows: [security],
           };
         }
         const create = sql.match(/^CREATE DATABASE "([^"]+)"$/);
@@ -402,3 +407,21 @@ test("a failed source security query is rejected without creating a database or 
 
   await assertSecurityCheckCleanup(harness);
 });
+
+for (const [mode, description] of [
+  ["missing-database-name", "a missing database name"],
+  ["missing-createdb-value", "a missing CREATEDB value"],
+  ["invalid-database-name-type", "a database name with an unexpected type"],
+  ["invalid-createdb-type", "a CREATEDB value with an unexpected type"],
+]) {
+  test(`a source security row with ${description} is rejected and cleaned up`, async () => {
+    const harness = createHarness(mode);
+
+    await assert.rejects(
+      runWith(harness),
+      /Unable to verify the source database and CREATEDB permission/,
+    );
+
+    await assertSecurityCheckCleanup(harness);
+  });
+}
