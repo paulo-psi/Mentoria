@@ -10,6 +10,7 @@ const sourceUrl = "postgres://roster_test:local-only@127.0.0.1:5432/source_db";
 function createHarness(mode) {
   const state = {
     clientCreations: 0,
+    adminConnectAttempts: 0,
     fixtureConnectAttempts: 0,
     createdDatabases: [],
     droppedDatabases: [],
@@ -20,6 +21,7 @@ function createHarness(mode) {
     adminEnded: false,
     runTestProcess: false,
     tempDirectories: [],
+    tempDirectoryRemovalAttempts: 0,
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
   };
 
@@ -31,11 +33,16 @@ function createHarness(mode) {
     }
 
     async connect() {
-      if (!this.isAdmin) {
-        state.fixtureConnectAttempts += 1;
-        if (mode === "fixture-connect") {
-          throw new Error("simulated fixture connection failure");
+      if (this.isAdmin) {
+        state.adminConnectAttempts += 1;
+        if (mode === "admin-connect") {
+          throw new Error("simulated administrative connection failure");
         }
+        return;
+      }
+      state.fixtureConnectAttempts += 1;
+      if (mode === "fixture-connect") {
+        throw new Error("simulated fixture connection failure");
       }
     }
 
@@ -106,7 +113,10 @@ function createHarness(mode) {
     },
     readFile: async () => "CREATE TABLE disposable_fixture (id integer);",
     readdir: async () => ["0000_initial.sql"],
-    rm,
+    rm: async (...args) => {
+      state.tempDirectoryRemovalAttempts += 1;
+      return rm(...args);
+    },
     writeFile,
   };
 
@@ -168,6 +178,20 @@ test("schema generation failure removes the generated database and temporary fil
   assert.equal(harness.state.fixtureQueries.length, 0);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
+});
+
+test("administrative connection failure closes the client and removes temporary files", async () => {
+  const harness = createHarness("admin-connect");
+
+  await assert.rejects(runWith(harness), /simulated administrative connection failure/);
+
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the fake administrative client is created");
+  assert.equal(harness.state.adminConnectAttempts, 1, "the administrative connection was attempted");
+  assert.equal(harness.state.adminEnded, true, "the administrative client is closed after connect fails");
+  assert.equal(harness.state.tempDirectories.length, 1, "the runner created one temporary directory");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "removal of the temporary directory was attempted");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("SQL application failure removes the generated database and temporary files", async () => {
