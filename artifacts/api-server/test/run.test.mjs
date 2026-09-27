@@ -470,6 +470,9 @@ test("database and temporary-directory cleanup failures are both reported", asyn
 
     assert.equal(harness.state.dropDatabaseAttempts, 1);
     assert.equal(harness.state.adminEnded, true);
+    assert.equal(harness.state.clientCreations, 2, "only injected fake admin and fixture clients were created");
+    assert.equal(harness.state.adminConnectAttempts, 1, "only the injected fake admin connection was opened");
+    assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was also provided by the test double");
     assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
   } finally {
     for (const directory of harness.state.tempDirectories) {
