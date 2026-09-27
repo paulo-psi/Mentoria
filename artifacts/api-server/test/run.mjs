@@ -86,6 +86,12 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
       stdio: "inherit",
     });
     if (generation.error) throw generation.error;
+    if (generation.signal) {
+      const error = new Error(`Roster test schema generation was terminated by signal ${generation.signal}.`);
+      error.signal = generation.signal;
+      error.exitCode = generation.status ?? 1;
+      throw error;
+    }
     if (generation.status !== 0) throw new Error("Failed to generate the application schema for roster tests.");
     const migrations = (await fs.readdir(migrationsDir)).filter((name) => name.endsWith(".sql"));
     if (migrations.length !== 1) {

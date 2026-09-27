@@ -87,6 +87,7 @@ function createHarness(mode) {
           state.dropDatabaseAttempts += 1;
           if (
             mode === "drop-database" ||
+            mode === "drop-and-temp-failure" ||
             mode === "multiple-cleanup-failures" ||
             mode === "roster-and-drop-failure" ||
             mode === "nonzero-roster-and-drop-failure"
@@ -130,6 +131,9 @@ function createHarness(mode) {
     readdir: async () => ["0000_initial.sql"],
     rm: async (...args) => {
       state.tempDirectoryRemovalAttempts += 1;
+      if (mode === "drop-and-temp-failure") {
+        throw new Error("simulated temporary-directory removal failure");
+      }
       return rm(...args);
     },
     writeFile,
@@ -137,6 +141,9 @@ function createHarness(mode) {
 
   const spawn = (_command, args) => {
     if (args.includes("generate")) {
+      if (mode === "signal-schema-generation") {
+        return { status: null, signal: "SIGTERM" };
+      }
       return { status: mode === "generate-schema" ? 3 : 0 };
     }
     state.testProcessStartAttempts += 1;
@@ -211,6 +218,21 @@ test("schema generation failure removes the generated database and temporary fil
   const harness = createHarness("generate-schema");
 
   await assert.rejects(runWith(harness), /Failed to generate the application schema/);
+
+  assert.equal(harness.state.fixtureQueries.length, 0);
+  assert.equal(harness.state.runTestProcess, false);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("schema generation interruption identifies the signal and removes resources", async () => {
+  const harness = createHarness("signal-schema-generation");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.match(error.message, /schema generation was terminated by signal SIGTERM/);
+    assert.equal(error.signal, "SIGTERM");
+    assert.equal(error.exitCode, 1);
+    return true;
+  });
 
   assert.equal(harness.state.fixtureQueries.length, 0);
   assert.equal(harness.state.runTestProcess, false);
@@ -399,6 +421,28 @@ test("all administrative cleanup failures are reported and remaining cleanup is 
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory cleanup was attempted");
   assert.equal(harness.state.clientCreations, 2, "only the injected fake admin and fixture clients were created");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("database and temporary-directory cleanup failures are both reported", async () => {
+  const harness = createHarness("drop-and-temp-failure");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 2);
+      assert.match(error.errors[0].message, /simulated database drop failure/);
+      assert.match(error.errors[1].message, /simulated temporary-directory removal failure/);
+      return true;
+    });
+
+    assert.equal(harness.state.dropDatabaseAttempts, 1);
+    assert.equal(harness.state.adminEnded, true);
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("administrative connection and temporary files are cleaned when dropping the database fails", async () => {
