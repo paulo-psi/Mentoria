@@ -23,6 +23,7 @@ function createHarness(mode) {
     runTestProcess: false,
     testProcessStartAttempts: 0,
     bundleAttempts: 0,
+    schemaGenerationResults: [],
     tempDirectories: [],
     tempDirectoryRemovalAttempts: 0,
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
@@ -146,10 +147,14 @@ function createHarness(mode) {
 
   const spawn = (_command, args) => {
     if (args.includes("generate")) {
+      let result;
       if (mode === "signal-schema-generation") {
-        return { status: null, signal: "SIGTERM" };
+        result = { status: null, signal: "SIGTERM" };
+      } else {
+        result = { status: mode === "generate-schema" ? 3 : 0 };
       }
-      return { status: mode === "generate-schema" ? 3 : 0 };
+      state.schemaGenerationResults.push(result);
+      return result;
     }
     state.testProcessStartAttempts += 1;
     if (mode === "test-process-start-error") {
@@ -227,6 +232,7 @@ test("schema generation failure removes the generated database and temporary fil
   await assert.rejects(runWith(harness), /Failed to generate the application schema/);
 
   assert.equal(harness.state.fixtureQueries.length, 0);
+  assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 3 }]);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
 });
@@ -241,6 +247,7 @@ test("schema generation interruption identifies the signal and removes resources
     return true;
   });
 
+  assert.deepEqual(harness.state.schemaGenerationResults, [{ status: null, signal: "SIGTERM" }]);
   assert.equal(harness.state.fixtureQueries.length, 0);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
@@ -293,11 +300,12 @@ test("test process failure removes the generated database and temporary files", 
   await assertResourcesRemoved(harness.state);
 });
 
-test("successful test process returns zero and removes all resources", async () => {
+test("successful schema generation runs tests and removes all resources", async () => {
   const harness = createHarness("successful-test-process");
 
   assert.equal(await runWith(harness), 0);
 
+  assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 0 }]);
   assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
   await assertResourcesRemoved(harness.state);
 });
