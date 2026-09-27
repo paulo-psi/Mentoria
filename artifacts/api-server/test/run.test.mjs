@@ -74,7 +74,7 @@ function createHarness(mode) {
         }
         if (sql.startsWith("SELECT pg_terminate_backend")) {
           state.terminateConnectionAttempts += 1;
-          if (mode === "terminate-connections") {
+          if (mode === "terminate-connections" || mode === "multiple-cleanup-failures") {
             throw new Error("simulated connection termination failure");
           }
           return { rows: [] };
@@ -84,6 +84,7 @@ function createHarness(mode) {
           state.dropDatabaseAttempts += 1;
           if (
             mode === "drop-database" ||
+            mode === "multiple-cleanup-failures" ||
             mode === "roster-and-drop-failure" ||
             mode === "nonzero-roster-and-drop-failure"
           ) {
@@ -324,6 +325,25 @@ test("temporary files are removed when terminating database connections fails", 
 
   assert.equal(harness.state.terminateConnectionAttempts, 1);
   await assertResourcesRemoved(harness.state);
+});
+
+test("all administrative cleanup failures are reported and remaining cleanup is attempted", async () => {
+  const harness = createHarness("multiple-cleanup-failures");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.match(error.errors[0].message, /simulated connection termination failure/);
+    assert.match(error.errors[1].message, /simulated database drop failure/);
+    return true;
+  });
+
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "termination was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "database removal was attempted despite termination failure");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory cleanup was attempted");
+  assert.equal(harness.state.clientCreations, 2, "only the injected fake admin and fixture clients were created");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("administrative connection and temporary files are cleaned when dropping the database fails", async () => {
