@@ -145,7 +145,7 @@ function createHarness(mode) {
     readdir: async () => ["0000_initial.sql"],
     rm: async (...args) => {
       state.tempDirectoryRemovalAttempts += 1;
-      if (mode === "drop-and-temp-failure") {
+      if (mode === "drop-and-temp-failure" || mode === "roster-and-temp-failure") {
         throw new Error("simulated temporary-directory removal failure");
       }
       return rm(...args);
@@ -169,7 +169,7 @@ function createHarness(mode) {
       return { error: new Error("simulated test process start failure") };
     }
     state.runTestProcess = true;
-    if (mode === "roster-and-drop-failure") {
+    if (mode === "roster-and-drop-failure" || mode === "roster-and-temp-failure") {
       throw new Error("simulated roster test execution failure");
     }
     if (mode === "signal-test-process") {
@@ -529,6 +529,33 @@ test("roster test failure remains visible when administrative cleanup also fails
   assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
   assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("roster test failure remains visible when temporary-directory cleanup also fails", async () => {
+  const harness = createHarness("roster-and-temp-failure");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 2);
+      assert.match(error.errors[0].message, /simulated roster test execution failure/);
+      assert.match(error.errors[1].message, /simulated temporary-directory removal failure/);
+      assert.equal(error.cause, error.errors[0]);
+      return true;
+    });
+
+    assert.equal(harness.state.runTestProcess, true, "the fake roster test process was attempted");
+    assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases, "the disposable database was dropped");
+    assert.equal(harness.state.adminEnded, true, "the fake administrative connection was closed");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+    assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
+    assert.equal(harness.state.adminConnectAttempts, 1, "the only admin connection was the fake");
+    assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was also fake");
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("nonzero roster test status and every administrative cleanup failure remain visible", async () => {
