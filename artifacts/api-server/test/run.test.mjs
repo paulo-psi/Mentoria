@@ -80,6 +80,9 @@ function createHarness(mode) {
     async end() {
       if (this.isAdmin) state.adminEnded = true;
       else state.fixtureEnded = true;
+      if (this.isAdmin && mode === "admin-end") {
+        throw new Error("simulated administrative connection close failure");
+      }
     }
   }
 
@@ -185,6 +188,17 @@ test("administrative connection and temporary files are cleaned when dropping th
   assert.equal(harness.state.dropDatabaseAttempts, 1, "the generated database drop was attempted");
   assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
   assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("temporary files are removed and admin close failures are reported", async () => {
+  const harness = createHarness("admin-end");
+
+  await assert.rejects(runWith(harness), /simulated administrative connection close failure/);
+
+  assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection close was attempted");
   assert.equal(harness.state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
