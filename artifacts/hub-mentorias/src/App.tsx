@@ -78,15 +78,15 @@ function Home() {
   return (
     <div className="grain min-h-[100dvh] w-full bg-background text-foreground">
       <header className="border-b border-border/70 bg-card/70">
-        <div className="mx-auto flex max-w-[1080px] items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <div className="mx-auto flex max-w-[1080px] flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-8 sm:py-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Waypoints size={19} />
             </span>
-            <span className="font-display text-xl">Hub de Mentorias</span>
+            <span className="min-w-0 font-display text-lg leading-tight sm:text-xl">HUB de Mentorias PIBEP PUCPR</span>
           </div>
           <button
-            className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted"
+            className="flex shrink-0 items-center gap-2 self-end rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted sm:self-auto"
             data-testid="button-atualizar"
             onClick={refreshAll}
             type="button"
