@@ -84,6 +84,7 @@ function createHarness(mode) {
           if (
             mode === "terminate-connections" ||
             mode === "multiple-cleanup-failures" ||
+            mode === "multiple-cleanup-and-admin-end-failures" ||
             mode === "nonzero-roster-and-multiple-cleanup-failures"
           ) {
             throw new Error("simulated connection termination failure");
@@ -97,6 +98,7 @@ function createHarness(mode) {
             mode === "drop-database" ||
             mode === "drop-and-temp-failure" ||
             mode === "multiple-cleanup-failures" ||
+            mode === "multiple-cleanup-and-admin-end-failures" ||
             mode === "roster-and-drop-failure" ||
             mode === "nonzero-roster-and-multiple-cleanup-failures" ||
             mode === "nonzero-roster-and-drop-failure"
@@ -124,7 +126,7 @@ function createHarness(mode) {
     async end() {
       if (this.isAdmin) state.adminEnded = true;
       else state.fixtureEnded = true;
-      if (this.isAdmin && mode === "admin-end") {
+      if (this.isAdmin && (mode === "admin-end" || mode === "multiple-cleanup-and-admin-end-failures")) {
         throw new Error("simulated administrative connection close failure");
       }
     }
@@ -572,6 +574,29 @@ test("all administrative cleanup failures are reported and remaining cleanup is 
   assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory cleanup was attempted");
   assert.equal(harness.state.clientCreations, 2, "only the injected fake admin and fixture clients were created");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("termination, database removal, and admin close failures all remain visible", async () => {
+  const harness = createHarness("multiple-cleanup-and-admin-end-failures");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 3);
+    assert.match(error.errors[0].message, /simulated connection termination failure/);
+    assert.match(error.errors[1].message, /simulated database drop failure/);
+    assert.match(error.errors[2].message, /simulated administrative connection close failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "termination was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "database removal ran despite termination failure");
+  assert.deepEqual(harness.state.droppedDatabases, [], "the failed drop was not recorded as successful");
+  assert.equal(harness.state.adminEnded, true, "admin close was attempted despite earlier cleanup failures");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory cleanup was attempted");
+  assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
+  assert.equal(harness.state.tempDirectories.length, 1);
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
