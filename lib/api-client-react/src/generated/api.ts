@@ -26,9 +26,11 @@ import type {
   MentorOption,
   ServerStatus,
   Student,
+  StudentDeleteInput,
   StudentInput,
   StudentUpdateInput,
   Team,
+  TeamDeleteInput,
   TeamInput,
   TeamUpdateInput
 } from './api.schemas';
@@ -482,14 +484,29 @@ export const getDeleteTeamUrl = (teamId: number,) => {
  * Teams with recorded mentoring sessions cannot be deleted.
  * @summary Delete a team and its students
  */
-export const deleteTeam = async (teamId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+export const deleteTeam = async (teamId: number,
+    teamDeleteInput: TeamDeleteInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
-  return customFetch<void>(getDeleteTeamUrl(teamId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getDeleteTeamUrl(teamId),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(teamDeleteInput)
   }
 );}
 
@@ -514,9 +531,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTeam>>, DeleteTeamMutationVariables> = (props) => {
-          const {teamId} = props ?? {};
+          const {teamId,data} = props ?? {};
 
-          return  deleteTeam(teamId,requestOptions)
+          return  deleteTeam(teamId,data,requestOptions)
         }
 
 
@@ -527,9 +544,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteTeamMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTeam>>>
-
+    export type DeleteTeamMutationBody = BodyType<TeamDeleteInput>
     export type DeleteTeamMutationError = ErrorType<void | ErrorResponse>
-    export type DeleteTeamMutationVariables = {teamId: number}
+    export type DeleteTeamMutationVariables = {teamId: number;data: BodyType<TeamDeleteInput>}
 
     /**
  * @summary Delete a team and its students
@@ -738,14 +755,29 @@ export const getDeleteStudentUrl = (teamId: number,
  * @summary Remove a student from a team
  */
 export const deleteStudent = async (teamId: number,
-    studentId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    studentId: number,
+    studentDeleteInput: StudentDeleteInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
-  return customFetch<void>(getDeleteStudentUrl(teamId,studentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getDeleteStudentUrl(teamId,studentId),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(studentDeleteInput)
   }
 );}
 
@@ -755,7 +787,7 @@ export const deleteStudent = async (teamId: number,
 
 export const getDeleteStudentMutationKey = () => ['deleteStudent'] as const;
 
-export const getDeleteStudentMutationOptions = <TError = ErrorType<void>,
+export const getDeleteStudentMutationOptions = <TError = ErrorType<void | ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStudent>>, TError,DeleteStudentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteStudent>>, TError,DeleteStudentMutationVariables, TContext> => {
 
@@ -770,9 +802,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStudent>>, DeleteStudentMutationVariables> = (props) => {
-          const {teamId,studentId} = props ?? {};
+          const {teamId,studentId,data} = props ?? {};
 
-          return  deleteStudent(teamId,studentId,requestOptions)
+          return  deleteStudent(teamId,studentId,data,requestOptions)
         }
 
 
@@ -783,14 +815,14 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteStudentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStudent>>>
-
-    export type DeleteStudentMutationError = ErrorType<void>
-    export type DeleteStudentMutationVariables = {teamId: number;studentId: number}
+    export type DeleteStudentMutationBody = BodyType<StudentDeleteInput>
+    export type DeleteStudentMutationError = ErrorType<void | ErrorResponse>
+    export type DeleteStudentMutationVariables = {teamId: number;studentId: number;data: BodyType<StudentDeleteInput>}
 
     /**
  * @summary Remove a student from a team
  */
-export const useDeleteStudent = <TError = ErrorType<void>,
+export const useDeleteStudent = <TError = ErrorType<void | ErrorResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStudent>>, TError,DeleteStudentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteStudent>>,

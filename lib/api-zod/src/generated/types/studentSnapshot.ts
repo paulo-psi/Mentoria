@@ -6,15 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface StudentUpdateInput {
+export interface StudentSnapshot {
+  /** @minimum 1 */
+  id: number;
   /**
      * @minLength 1
      * @maxLength 200
      */
   name: string;
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  expectedName: string;
+  /** @minimum 0 */
+  sortOrder: number;
 }

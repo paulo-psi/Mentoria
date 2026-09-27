@@ -1,73 +1,12 @@
-import { asc, count, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { GetTeamsResponse } from "@workspace/api-zod";
-import { db, mentorsTable, mentoringSessionsTable, studentsTable, teamsTable } from "@workspace/db";
 import { requireApprovedUser } from "../middlewares/requireApprovedUser";
+import { readTeams } from "../lib/team-read";
 
 const router: IRouter = Router();
 
 router.get("/teams", requireApprovedUser, async (_req, res): Promise<void> => {
-  const rows = await db
-    .select({
-      id: teamsTable.id,
-      name: teamsTable.name,
-      pitchSummary: teamsTable.pitchSummary,
-      currentStage: teamsTable.currentStage,
-      createdAt: teamsTable.createdAt,
-      mentorId: mentorsTable.id,
-      mentorName: mentorsTable.name,
-      mentorEmail: mentorsTable.email,
-      mentorExpertiseArea: mentorsTable.expertiseArea,
-      mentorType: mentorsTable.mentorType,
-      sessionCount: count(mentoringSessionsTable.id),
-    })
-    .from(teamsTable)
-    .innerJoin(mentorsTable, eq(teamsTable.mainMentorId, mentorsTable.id))
-    .leftJoin(mentoringSessionsTable, eq(mentoringSessionsTable.teamId, teamsTable.id))
-    .groupBy(teamsTable.id, mentorsTable.id)
-    .orderBy(asc(teamsTable.id));
-
-  const studentRows = await db
-    .select({
-      teamId: studentsTable.teamId,
-      id: studentsTable.id,
-      name: studentsTable.name,
-      sortOrder: studentsTable.sortOrder,
-    })
-    .from(studentsTable)
-    .orderBy(asc(studentsTable.teamId), asc(studentsTable.sortOrder));
-
-  const studentsByTeam = new Map<number, typeof studentRows>();
-  for (const student of studentRows) {
-    const members = studentsByTeam.get(student.teamId) ?? [];
-    members.push(student);
-    studentsByTeam.set(student.teamId, members);
-  }
-
-  res.json(
-    GetTeamsResponse.parse(
-      rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        pitchSummary: row.pitchSummary,
-        currentStage: row.currentStage,
-        createdAt: row.createdAt.toISOString(),
-        mainMentor: {
-          id: row.mentorId,
-          name: row.mentorName,
-          email: row.mentorEmail,
-          expertiseArea: row.mentorExpertiseArea,
-          mentorType: row.mentorType,
-        },
-        students: (studentsByTeam.get(row.id) ?? []).map(({ id, name, sortOrder }) => ({
-          id,
-          name,
-          sortOrder,
-        })),
-        sessionCount: row.sessionCount,
-      })),
-    ),
-  );
+  res.json(GetTeamsResponse.parse(await readTeams()));
 });
 
 export default router;

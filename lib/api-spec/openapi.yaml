@@ -134,7 +134,7 @@ paths:
         "404":
           description: Team not found
         "409":
-          description: Team name already exists
+          description: Team name already exists or team changed since it was loaded
           content:
             application/json:
               schema:
@@ -151,9 +151,17 @@ paths:
           schema:
             type: integer
             minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamDeleteInput"
       responses:
         "204":
           description: Team deleted
+        "400":
+          description: Invalid deletion confirmation
         "401":
           description: Sign in required
         "403":
@@ -161,7 +169,7 @@ paths:
         "404":
           description: Team not found
         "409":
-          description: Team has mentoring sessions and cannot be deleted
+          description: Team has mentoring sessions or changed since confirmation
           content:
             application/json:
               schema:
@@ -246,6 +254,12 @@ paths:
           description: Administrator access required
         "404":
           description: Team or student not found
+        "409":
+          description: Student changed since it was loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deleteStudent
       tags: [teams]
@@ -263,15 +277,29 @@ paths:
           schema:
             type: integer
             minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentDeleteInput"
       responses:
         "204":
           description: Student deleted
+        "400":
+          description: Invalid deletion confirmation
         "401":
           description: Sign in required
         "403":
           description: Administrator access required
         "404":
           description: Team or student not found
+        "409":
+          description: Student changed since confirmation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /mentors:
     get:
       operationId: getMentors
@@ -433,7 +461,6 @@ components:
       required: [name, mainMentorId, students]
     TeamUpdateInput:
       type: object
-      minProperties: 1
       properties:
         name:
           type: string
@@ -442,6 +469,43 @@ components:
         mainMentorId:
           type: integer
           minimum: 1
+        expectedName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        expectedMainMentorId:
+          type: integer
+          minimum: 1
+      required: [expectedName, expectedMainMentorId]
+    StudentSnapshot:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        sortOrder:
+          type: integer
+          minimum: 0
+      required: [id, name, sortOrder]
+    TeamDeleteInput:
+      type: object
+      properties:
+        expectedName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        expectedMainMentorId:
+          type: integer
+          minimum: 1
+        expectedStudents:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentSnapshot"
+      required: [expectedName, expectedMainMentorId, expectedStudents]
     StudentInput:
       type: object
       properties:
@@ -457,5 +521,17 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-      required: [name]
+        expectedName:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [name, expectedName]
+    StudentDeleteInput:
+      type: object
+      properties:
+        expectedName:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [expectedName]
 

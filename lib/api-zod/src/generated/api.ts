@@ -116,11 +116,16 @@ export const UpdateTeamParams = zod.object({
 export const updateTeamBodyNameMax = 120;
 
 
+export const updateTeamBodyExpectedNameMax = 120;
+
+
 
 
 export const UpdateTeamBody = zod.object({
   "name": zod.string().min(1).max(updateTeamBodyNameMax).optional(),
-  "mainMentorId": zod.number().int().min(1).optional()
+  "mainMentorId": zod.number().int().min(1).optional(),
+  "expectedName": zod.string().min(1).max(updateTeamBodyExpectedNameMax),
+  "expectedMainMentorId": zod.number().int().min(1)
 })
 
 export const updateTeamResponseStudentsItemSortOrderMin = 0;
@@ -160,6 +165,26 @@ export const UpdateTeamResponse = zod.object({
 
 export const DeleteTeamParams = zod.object({
   "teamId": zod.coerce.number().int().min(1)
+})
+
+export const deleteTeamBodyExpectedNameMax = 120;
+
+
+
+export const deleteTeamBodyExpectedStudentsItemNameMax = 200;
+
+export const deleteTeamBodyExpectedStudentsItemSortOrderMin = 0;
+
+
+
+export const DeleteTeamBody = zod.object({
+  "expectedName": zod.string().min(1).max(deleteTeamBodyExpectedNameMax),
+  "expectedMainMentorId": zod.number().int().min(1),
+  "expectedStudents": zod.array(zod.object({
+  "id": zod.number().int().min(1),
+  "name": zod.string().min(1).max(deleteTeamBodyExpectedStudentsItemNameMax),
+  "sortOrder": zod.number().int().min(deleteTeamBodyExpectedStudentsItemSortOrderMin)
+}))
 })
 
 export const DeleteTeamResponse = zod.void()
@@ -208,10 +233,13 @@ export const UpdateStudentParams = zod.object({
 
 export const updateStudentBodyNameMax = 200;
 
+export const updateStudentBodyExpectedNameMax = 200;
+
 
 
 export const UpdateStudentBody = zod.object({
-  "name": zod.string().min(1).max(updateStudentBodyNameMax)
+  "name": zod.string().min(1).max(updateStudentBodyNameMax),
+  "expectedName": zod.string().min(1).max(updateStudentBodyExpectedNameMax)
 })
 
 export const updateStudentResponseSortOrderMin = 0;
@@ -235,6 +263,14 @@ export const UpdateStudentResponse = zod.object({
 export const DeleteStudentParams = zod.object({
   "teamId": zod.coerce.number().int().min(1),
   "studentId": zod.coerce.number().int().min(1)
+})
+
+export const deleteStudentBodyExpectedNameMax = 200;
+
+
+
+export const DeleteStudentBody = zod.object({
+  "expectedName": zod.string().min(1).max(deleteStudentBodyExpectedNameMax)
 })
 
 export const DeleteStudentResponse = zod.void()

@@ -5,15 +5,9 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { StudentSnapshot } from './studentSnapshot';
 
-export interface TeamUpdateInput {
-  /**
-     * @minLength 1
-     * @maxLength 120
-     */
-  name?: string;
-  /** @minimum 1 */
-  mainMentorId?: number;
+export interface TeamDeleteInput {
   /**
      * @minLength 1
      * @maxLength 120
@@ -21,4 +15,5 @@ export interface TeamUpdateInput {
   expectedName: string;
   /** @minimum 1 */
   expectedMainMentorId: number;
+  expectedStudents: StudentSnapshot[];
 }

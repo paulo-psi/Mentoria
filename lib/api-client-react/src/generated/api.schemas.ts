@@ -116,6 +116,36 @@ export interface TeamUpdateInput {
   name?: string;
   /** @minimum 1 */
   mainMentorId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  expectedName: string;
+  /** @minimum 1 */
+  expectedMainMentorId: number;
+}
+
+export interface StudentSnapshot {
+  /** @minimum 1 */
+  id: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+  /** @minimum 0 */
+  sortOrder: number;
+}
+
+export interface TeamDeleteInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  expectedName: string;
+  /** @minimum 1 */
+  expectedMainMentorId: number;
+  expectedStudents: StudentSnapshot[];
 }
 
 export interface StudentInput {
@@ -132,5 +162,18 @@ export interface StudentUpdateInput {
      * @maxLength 200
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  expectedName: string;
+}
+
+export interface StudentDeleteInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  expectedName: string;
 }
 

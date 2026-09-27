@@ -6,12 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface StudentUpdateInput {
-  /**
-     * @minLength 1
-     * @maxLength 200
-     */
-  name: string;
+export interface StudentDeleteInput {
   /**
      * @minLength 1
      * @maxLength 200

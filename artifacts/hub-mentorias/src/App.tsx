@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ClerkProvider, Show } from '@clerk/react';
 import { ptBR } from '@clerk/localizations';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Link } from 'wouter';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -9,19 +10,23 @@ import NotFound from '@/pages/not-found';
 import {
   CheckCircle2,
   CircleAlert,
+  Settings2,
   RefreshCw,
   Search,
   UsersRound,
   Waypoints,
 } from 'lucide-react';
 import {
+  getGetAccessPermissionsQueryKey,
   getGetHealthQueryKey,
   getGetTeamsQueryKey,
   getHealthCheckQueryKey,
   useGetHealth,
+  useGetAccessPermissions,
   useGetTeams,
   useHealthCheck,
 } from '@workspace/api-client-react';
+import ManagePage from '@/pages/manage';
 import {
   Route,
   Redirect,
@@ -53,6 +58,13 @@ function normalizeSearchText(value: string): string {
 
 function Home() {
   const [search, setSearch] = useState('');
+  const access = useGetAccessPermissions({
+    query: {
+      queryKey: getGetAccessPermissionsQueryKey(),
+      staleTime: 0,
+      refetchOnMount: 'always',
+    },
+  });
   const healthCheck = useHealthCheck({
     query: {
       queryKey: getHealthCheckQueryKey(),
@@ -95,6 +107,7 @@ function Home() {
     void healthCheck.refetch();
     void health.refetch();
     void teams.refetch();
+    void access.refetch();
   };
 
   return (
@@ -108,6 +121,11 @@ function Home() {
             <span className="min-w-0 font-display text-lg leading-tight sm:text-xl">HUB de Mentorias PIBEP PUCPR</span>
           </div>
           <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+            {!access.isError && access.data?.canManage === true && (
+              <Link href="/manage" className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15" data-testid="link-manter-equipes">
+                <Settings2 size={14} /> <span>Manter equipes</span>
+              </Link>
+            )}
             <button
               className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted"
               data-testid="button-atualizar"
@@ -327,6 +345,7 @@ function Router() {
       <Switch>
         <Route path="/" component={HomeRedirect} />
         <Route path="/user-portal" component={UserPortal} />
+        <Route path="/manage" component={ManageRoute} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
         <Route component={NotFound} />
@@ -348,6 +367,15 @@ function UserPortal() {
   return (
     <>
       <Show when="signed-in"><Home /></Show>
+      <Show when="signed-out"><Redirect to="/" /></Show>
+    </>
+  );
+}
+
+function ManageRoute() {
+  return (
+    <>
+      <Show when="signed-in"><ManagePage /></Show>
       <Show when="signed-out"><Redirect to="/" /></Show>
     </>
   );

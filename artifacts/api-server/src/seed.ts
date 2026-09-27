@@ -1,4 +1,4 @@
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import {
   db,
   mentorsTable,
@@ -10,6 +10,7 @@ import {
   insertStudentSchema,
 } from "@workspace/db";
 import { logger } from "./lib/logger";
+import { rosterWriteLock } from "./lib/roster-lock";
 import { officialTeams } from "./official-data";
 
 const legacyDemoMentors = [
@@ -214,7 +215,7 @@ function matchesLegacyDemoDataset(
 
 export async function seedDatabase(): Promise<void> {
   const result = await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(732941)`);
+    await tx.execute(rosterWriteLock);
 
     // A transaction uses one PostgreSQL client, so keep queries sequential.
     const mentors = await tx.select().from(mentorsTable);
