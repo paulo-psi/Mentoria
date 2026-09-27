@@ -12,6 +12,7 @@ function createHarness(mode) {
     clientCreations: 0,
     adminConnectAttempts: 0,
     fixtureConnectAttempts: 0,
+    fixtureConnectedDatabase: null,
     createdDatabases: [],
     droppedDatabases: [],
     dropDatabaseAttempts: 0,
@@ -30,7 +31,8 @@ function createHarness(mode) {
   class FakeClient {
     constructor({ connectionString }) {
       state.clientCreations += 1;
-      this.database = new URL(connectionString).pathname.slice(1);
+      const url = new URL(connectionString);
+      this.database = url.searchParams.get("database") ?? url.pathname.slice(1);
       this.isAdmin = state.clientCreations === 1;
     }
 
@@ -43,6 +45,7 @@ function createHarness(mode) {
         return;
       }
       state.fixtureConnectAttempts += 1;
+      state.fixtureConnectedDatabase = this.database;
       if (mode === "fixture-connect") {
         throw new Error("simulated fixture connection failure");
       }
@@ -267,6 +270,32 @@ test("successful test process returns zero and removes all resources", async () 
   assert.equal(await runWith(harness), 0);
 
   assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
+  await assertResourcesRemoved(harness.state);
+});
+
+test("a conflicting source database query option cannot redirect fixture setup", async () => {
+  const harness = createHarness("successful-test-process");
+  const conflictingDatabase = "database_from_query_option";
+
+  assert.equal(
+    await runWith(harness, {
+      DATABASE_URL: `${sourceUrl}?database=${conflictingDatabase}`,
+    }),
+    0,
+  );
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1);
+  assert.equal(
+    harness.state.fixtureConnectedDatabase,
+    harness.state.createdDatabases[0],
+    "the fixture client connected to the generated disposable database",
+  );
+  assert.notEqual(
+    harness.state.fixtureConnectedDatabase,
+    conflictingDatabase,
+    "the source URL's database query option did not override the disposable database",
+  );
+  assert.equal(harness.state.fixtureQueries.length, 1, "fixture SQL was applied after verifying the database");
   await assertResourcesRemoved(harness.state);
 });
 
