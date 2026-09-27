@@ -6,12 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accessPermissions';
+export * from './errorResponse';
 export * from './healthStatus';
 export * from './healthStatusDatabase';
 export * from './healthStatusStatus';
 export * from './mentor';
 export * from './mentorMentorType';
+export * from './mentorOption';
 export * from './serverStatus';
 export * from './serverStatusStatus';
 export * from './student';
+export * from './studentInput';
+export * from './studentUpdateInput';
 export * from './team';
+export * from './teamInput';
+export * from './teamUpdateInput';

@@ -12,6 +12,10 @@ tags:
     description: Health operations
   - name: teams
     description: Mentoring teams
+  - name: access
+    description: User permissions
+  - name: mentors
+    description: Available mentors
 paths:
   /healthz:
     get:
@@ -59,8 +63,271 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Team"
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a team with its initial students
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamInput"
+      responses:
+        "201":
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          description: Invalid team data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "409":
+          description: Team name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /teams/{teamId}:
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      summary: Update a team name or its main mentor
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamUpdateInput"
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          description: Invalid team data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team not found
+        "409":
+          description: Team name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteTeam
+      tags: [teams]
+      summary: Delete a team and its students
+      description: Teams with recorded mentoring sessions cannot be deleted.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: Team deleted
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team not found
+        "409":
+          description: Team has mentoring sessions and cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /teams/{teamId}/students:
+    post:
+      operationId: createStudent
+      tags: [teams]
+      summary: Add a student to a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentInput"
+      responses:
+        "201":
+          description: Student added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+        "400":
+          description: Invalid student data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team not found
+  /teams/{teamId}/students/{studentId}:
+    patch:
+      operationId: updateStudent
+      tags: [teams]
+      summary: Update a student's name
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentUpdateInput"
+      responses:
+        "200":
+          description: Updated student
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Student"
+        "400":
+          description: Invalid student data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team or student not found
+    delete:
+      operationId: deleteStudent
+      tags: [teams]
+      summary: Remove a student from a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "204":
+          description: Student deleted
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team or student not found
+  /mentors:
+    get:
+      operationId: getMentors
+      tags: [mentors]
+      summary: List mentors available for team assignment
+      responses:
+        "200":
+          description: Mentors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MentorOption"
+        "401":
+          description: Sign in required
+        "403":
+          description: Approved access required
+  /access:
+    get:
+      operationId: getAccessPermissions
+      tags: [access]
+      summary: Get current user's safe access capabilities
+      responses:
+        "200":
+          description: Access capabilities
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccessPermissions"
+        "401":
+          description: Sign in required
+        "403":
+          description: Approved access required
 components:
   schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    AccessPermissions:
+      type: object
+      properties:
+        canManage:
+          type: boolean
+      required: [canManage]
+    MentorOption:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+      required: [id, name]
     ServerStatus:
       type: object
       properties:
@@ -147,4 +414,48 @@ components:
         - mainMentor
         - students
         - sessionCount
+    TeamInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        mainMentorId:
+          type: integer
+          minimum: 1
+        students:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
+      required: [name, mainMentorId, students]
+    TeamUpdateInput:
+      type: object
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        mainMentorId:
+          type: integer
+          minimum: 1
+    StudentInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [name]
+    StudentUpdateInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required: [name]
 

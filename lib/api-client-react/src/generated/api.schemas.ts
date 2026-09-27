@@ -5,6 +5,19 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface AccessPermissions {
+  canManage: boolean;
+}
+
+export interface MentorOption {
+  id: number;
+  name: string;
+}
+
 export type ServerStatusStatus = typeof ServerStatusStatus[keyof typeof ServerStatusStatus];
 
 
@@ -78,5 +91,46 @@ export interface Team {
   students: Student[];
   /** @minimum 0 */
   sessionCount: number;
+}
+
+export interface TeamInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @minimum 1 */
+  mainMentorId: number;
+  /**
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  students: string[];
+}
+
+export interface TeamUpdateInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name?: string;
+  /** @minimum 1 */
+  mainMentorId?: number;
+}
+
+export interface StudentInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+}
+
+export interface StudentUpdateInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
 }
 

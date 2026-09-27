@@ -59,3 +59,202 @@ export const GetTeamsResponseItem = zod.object({
 export const GetTeamsResponse = zod.array(GetTeamsResponseItem)
 
 
+/**
+ * @summary Create a team with its initial students
+ */
+export const createTeamBodyNameMax = 120;
+
+
+export const createTeamBodyStudentsItemMax = 200;
+
+
+
+export const CreateTeamBody = zod.object({
+  "name": zod.string().min(1).max(createTeamBodyNameMax),
+  "mainMentorId": zod.number().int().min(1),
+  "students": zod.array(zod.string().min(1).max(createTeamBodyStudentsItemMax))
+})
+
+export const createTeamResponseStudentsItemSortOrderMin = 0;
+
+export const createTeamResponseSessionCountMin = 0;
+
+
+
+export const CreateTeamResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "pitchSummary": zod.string().nullable(),
+  "currentStage": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "mainMentor": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string().nullable(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable()
+}),
+  "students": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "sortOrder": zod.number().int().min(createTeamResponseStudentsItemSortOrderMin)
+})),
+  "sessionCount": zod.number().int().min(createTeamResponseSessionCountMin)
+})
+
+
+/**
+ * @summary Update a team name or its main mentor
+ */
+
+
+
+export const UpdateTeamParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1)
+})
+
+export const updateTeamBodyNameMax = 120;
+
+
+
+
+export const UpdateTeamBody = zod.object({
+  "name": zod.string().min(1).max(updateTeamBodyNameMax).optional(),
+  "mainMentorId": zod.number().int().min(1).optional()
+})
+
+export const updateTeamResponseStudentsItemSortOrderMin = 0;
+
+export const updateTeamResponseSessionCountMin = 0;
+
+
+
+export const UpdateTeamResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "pitchSummary": zod.string().nullable(),
+  "currentStage": zod.string().nullable(),
+  "createdAt": zod.coerce.date(),
+  "mainMentor": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string().nullable(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable()
+}),
+  "students": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "sortOrder": zod.number().int().min(updateTeamResponseStudentsItemSortOrderMin)
+})),
+  "sessionCount": zod.number().int().min(updateTeamResponseSessionCountMin)
+})
+
+
+/**
+ * Teams with recorded mentoring sessions cannot be deleted.
+ * @summary Delete a team and its students
+ */
+
+
+
+export const DeleteTeamParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteTeamResponse = zod.void()
+
+
+/**
+ * @summary Add a student to a team
+ */
+
+
+
+export const CreateStudentParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1)
+})
+
+export const createStudentBodyNameMax = 200;
+
+
+
+export const CreateStudentBody = zod.object({
+  "name": zod.string().min(1).max(createStudentBodyNameMax)
+})
+
+export const createStudentResponseSortOrderMin = 0;
+
+
+
+export const CreateStudentResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "sortOrder": zod.number().int().min(createStudentResponseSortOrderMin)
+})
+
+
+/**
+ * @summary Update a student's name
+ */
+
+
+
+
+export const UpdateStudentParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1),
+  "studentId": zod.coerce.number().int().min(1)
+})
+
+export const updateStudentBodyNameMax = 200;
+
+
+
+export const UpdateStudentBody = zod.object({
+  "name": zod.string().min(1).max(updateStudentBodyNameMax)
+})
+
+export const updateStudentResponseSortOrderMin = 0;
+
+
+
+export const UpdateStudentResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "sortOrder": zod.number().int().min(updateStudentResponseSortOrderMin)
+})
+
+
+/**
+ * @summary Remove a student from a team
+ */
+
+
+
+
+export const DeleteStudentParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1),
+  "studentId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteStudentResponse = zod.void()
+
+
+/**
+ * @summary List mentors available for team assignment
+ */
+export const GetMentorsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string()
+})
+export const GetMentorsResponse = zod.array(GetMentorsResponseItem)
+
+
+/**
+ * @summary Get current user's safe access capabilities
+ */
+export const GetAccessPermissionsResponse = zod.object({
+  "canManage": zod.boolean()
+})
+
+
