@@ -10,6 +10,7 @@ const sourceUrl = "postgres://roster_test:local-only@127.0.0.1:5432/source_db";
 function createHarness(mode) {
   const state = {
     clientCreations: 0,
+    fixtureConnectAttempts: 0,
     createdDatabases: [],
     droppedDatabases: [],
     dropDatabaseAttempts: 0,
@@ -29,7 +30,14 @@ function createHarness(mode) {
       this.isAdmin = state.clientCreations === 1;
     }
 
-    async connect() {}
+    async connect() {
+      if (!this.isAdmin) {
+        state.fixtureConnectAttempts += 1;
+        if (mode === "fixture-connect") {
+          throw new Error("simulated fixture connection failure");
+        }
+      }
+    }
 
     async query(sql) {
       if (this.isAdmin) {
@@ -170,6 +178,18 @@ test("SQL application failure removes the generated database and temporary files
   assert.equal(harness.state.fixtureQueries.length, 1);
   assert.equal(harness.state.fixtureEnded, true);
   assert.equal(harness.state.runTestProcess, false);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("fixture connection failure removes the generated database and temporary files", async () => {
+  const harness = createHarness("fixture-connect");
+
+  await assert.rejects(runWith(harness), /simulated fixture connection failure/);
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1);
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL is not applied before connecting");
+  assert.equal(harness.state.fixtureEnded, true, "the fixture client is closed after the failed connection");
+  assert.equal(harness.state.runTestProcess, false, "the roster test process does not run");
   await assertResourcesRemoved(harness.state);
 });
 
