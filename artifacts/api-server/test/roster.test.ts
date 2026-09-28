@@ -1150,7 +1150,6 @@ test("a student deletion concurrent with startup seed is serialized and preserve
 
     let seedSettled = false;
     let deletionSettled = false;
-    seedRun = seedDatabase().finally(() => { seedSettled = true; });
     deletionRun = request(
       "DELETE",
       `/teams/${team.id}/students/${student.id}`,
@@ -1158,9 +1157,7 @@ test("a student deletion concurrent with startup seed is serialized and preserve
       "admin",
     ).finally(() => { deletionSettled = true; });
 
-    const deadline = Date.now() + 5_000;
-    let waitingOperations = 0;
-    while (Date.now() < deadline) {
+    const waitingRosterOperations = async () => {
       const { rows: [{ count }] } = await pool.query<{ count: number }>(`
         SELECT count(*)::int AS count
         FROM pg_locks
@@ -1170,7 +1167,22 @@ test("a student deletion concurrent with startup seed is serialized and preserve
           AND objid = 732941
           AND objsubid = 1
       `);
-      waitingOperations = count;
+      return count;
+    };
+    let waitingOperations = 0;
+    const deletionDeadline = Date.now() + 5_000;
+    while (Date.now() < deletionDeadline) {
+      waitingOperations = await waitingRosterOperations();
+      if (waitingOperations === 1) break;
+      assert.equal(deletionSettled, false, "student deletion must wait for the shared roster lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(waitingOperations, 1, "student deletion must queue before startup seed");
+
+    seedRun = seedDatabase().finally(() => { seedSettled = true; });
+    const seedDeadline = Date.now() + 5_000;
+    while (Date.now() < seedDeadline) {
+      waitingOperations = await waitingRosterOperations();
       if (waitingOperations === 2) break;
       assert.equal(seedSettled, false, "startup seed must wait for the shared roster lock");
       assert.equal(deletionSettled, false, "student deletion must wait for the shared roster lock");
