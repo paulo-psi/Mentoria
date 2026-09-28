@@ -310,6 +310,34 @@ test("only the complete legacy demo migrates; any changed legacy data is preserv
   }
 });
 
+test("extra mentors or teams in a legacy roster survive startup seeding", async (t) => {
+  await t.test("an additional mentor", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
+      const added = await db.insert(mentorsTable).values({
+        name: "Mentora adicional",
+        email: "mentora.adicional@example.org",
+        expertiseArea: "Planejamento",
+        mentorType: "externo",
+      }).returning();
+      assert.equal(added.length, 1);
+      assert.equal((await db.select().from(mentorsTable)).length, mentors.length + 1);
+    });
+  });
+
+  await t.test("an additional team", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors, teams }) => {
+      const added = await db.insert(teamsTable).values({
+        name: "Equipe adicional",
+        pitchSummary: "Projeto cadastrado após a demonstração",
+        currentStage: "Validação",
+        mainMentorId: mentors[0].id,
+      }).returning();
+      assert.equal(added.length, 1);
+      assert.equal((await db.select().from(teamsTable)).length, teams.length + 1);
+    });
+  });
+});
+
 test("a changed legacy team or session signature field preserves every roster table", async (t) => {
   await t.test("team pitch summary differs from the legacy fixture", async () => {
     await assertLegacyDataPreservedAfterChange(async ({ teams }) => {
