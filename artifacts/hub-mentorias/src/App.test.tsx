@@ -98,6 +98,23 @@ describe('busca de equipes', () => {
     expect(within(card).getByText('Lívia Gonçalves')).toBeTruthy();
   });
 
+  it('encontra uma equipe quando a busca colada usa acentos combinantes sem mudar o nome exibido', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar equipe, mentor ou estudante' });
+    const query = 'Equipe Educac\u0327a\u0303o';
+
+    await user.click(input);
+    await user.paste(query);
+
+    expect(input).toHaveProperty('value', query);
+    const card = screen.getByTestId('card-equipe-1');
+    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+    expect(within(card).getByText('Equipe Educação')).toBeTruthy();
+    expect(within(card).getByText('João Araújo')).toBeTruthy();
+    expect(within(card).getByText('Lívia Gonçalves')).toBeTruthy();
+  });
+
   it('não encontra equipe com uma busca que atravessa campos de nome diferentes', async () => {
     const user = userEvent.setup();
     render(<Home />);
