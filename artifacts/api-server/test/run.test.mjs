@@ -115,7 +115,9 @@ function createHarness(mode) {
         };
       }
       state.fixtureQueries.push(sql);
-      if (mode === "apply-sql") throw new Error("simulated fixture SQL failure");
+      if (mode === "apply-sql" || mode === "apply-sql-and-end") {
+        throw new Error("simulated fixture SQL failure");
+      }
       return { rows: [] };
     }
 
@@ -130,7 +132,11 @@ function createHarness(mode) {
       )) {
         throw new Error("simulated administrative connection close failure");
       }
-      if (!this.isAdmin && (mode === "fixture-connect-and-end" || mode === "fixture-end")) {
+      if (!this.isAdmin && (
+        mode === "fixture-connect-and-end" ||
+        mode === "fixture-end" ||
+        mode === "apply-sql-and-end"
+      )) {
         throw new Error("simulated fixture connection close failure");
       }
     }
@@ -347,6 +353,35 @@ test("fixture setup and close failures are both reported before administrative c
   assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
   assert.equal(harness.state.fixtureEnded, true, "fixture close was attempted");
   assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+  assert.equal(harness.state.terminateConnectionAttempts, 1);
+  assert.equal(harness.state.dropDatabaseAttempts, 1);
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("fixture SQL and close failures are both reported before administrative cleanup", async () => {
+  const harness = createHarness("apply-sql-and-end");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.match(error.message, /Fixture setup failed and closing its connection also failed/);
+    assert.equal(error.errors.length, 2);
+    assert.match(error.errors[0].message, /simulated fixture SQL failure/);
+    assert.match(error.errors[1].message, /simulated fixture connection close failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1);
+  assert.deepEqual(
+    harness.state.fixtureQueries,
+    ["CREATE TABLE disposable_fixture (id integer);"],
+    "fixture SQL application was attempted",
+  );
+  assert.equal(harness.state.fixtureEnded, true, "fixture close was attempted");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+  assert.equal(harness.state.runTestProcess, false);
   assert.equal(harness.state.terminateConnectionAttempts, 1);
   assert.equal(harness.state.dropDatabaseAttempts, 1);
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
