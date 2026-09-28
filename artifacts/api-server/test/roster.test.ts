@@ -299,6 +299,40 @@ test("a changed legacy team or session field preserves every roster table", asyn
   });
 });
 
+test("a changed legacy mentor or team signature field preserves every roster table", async (t) => {
+  await t.test("mentor email differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
+      await db.update(mentorsTable)
+        .set({ email: "ana.atualizada@example.org" })
+        .where(eq(mentorsTable.id, mentors[0].id));
+    });
+  });
+
+  await t.test("mentor type differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
+      await db.update(mentorsTable)
+        .set({ mentorType: "externo" })
+        .where(eq(mentorsTable.id, mentors[0].id));
+    });
+  });
+
+  await t.test("team stage differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ teams }) => {
+      await db.update(teamsTable)
+        .set({ currentStage: "Validação atualizada pela equipe" })
+        .where(eq(teamsTable.id, teams[0].id));
+    });
+  });
+
+  await t.test("team mentor assignment differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors, teams }) => {
+      await db.update(teamsTable)
+        .set({ mainMentorId: mentors[1].id })
+        .where(eq(teamsTable.id, teams[0].id));
+    });
+  });
+});
+
 test("a failed official roster insert rolls back the complete legacy replacement", async () => {
   await clearRosterTables();
   let triggerCreated = false;
