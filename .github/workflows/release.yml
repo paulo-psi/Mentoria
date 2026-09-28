@@ -66,6 +66,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify tagged commit is merged to main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Refusing to publish a release from a commit that is not reachable from main."
+            exit 1
+          fi
       - name: Publish only after live isolation succeeds
         env:
           GH_TOKEN: ${{ github.token }}
