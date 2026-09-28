@@ -88,6 +88,10 @@ test("the real pg client applies fixtures only to the disposable database despit
     assert.match(createdDatabase, /^roster_test_[a-f0-9]{32}$/);
     assert.equal(fixtureDatabase, createdDatabase, "pg connected to the generated database, not the query option");
     assert.equal(fixtureTableCreated, true, "fixture SQL ran in the generated database");
+    const { rows: [sourceProbe] } = await verifier.query(
+      "select to_regclass('fixture_isolation_probe') as table_name",
+    );
+    assert.equal(sourceProbe.table_name, null, "fixture SQL did not create a table in the source database");
     assert.equal(testProcessStarted, true);
     const { rows: [remaining] } = await verifier.query(
       "select count(*)::integer as count from pg_database where datname = $1",
