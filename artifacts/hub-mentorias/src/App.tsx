@@ -51,6 +51,7 @@ import {
 } from './auth';
 import { DashboardKpis } from '@/components/dashboard-kpis';
 import { TeamsExecutiveTable, TeamsTableSkeleton } from '@/components/teams-executive-table';
+import { SessionRegistrationModal } from '@/components/session-registration-modal';
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ function normalizeSearchText(value: string): string {
 
 export function Home() {
   const [search, setSearch] = useState('');
+  const [registrationOpen, setRegistrationOpen] = useState(false);
   const access = useGetAccessPermissions({
     query: {
       queryKey: getGetAccessPermissionsQueryKey(),
@@ -115,6 +117,7 @@ export function Home() {
     health.data?.status === 'ok' &&
     health.data.database === 'connected';
   const accessDenied = teams.error?.status === 403;
+  const canManage = access.data?.canManage === true;
 
   const refreshAll = () => {
     void healthCheck.refetch();
@@ -156,10 +159,11 @@ export function Home() {
               Atualizar
             </button>
             <button
-              aria-label="Novo registro, disponível em uma próxima etapa"
+              aria-label={canManage ? 'Novo registro' : 'Novo registro, disponível em uma próxima etapa'}
               className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:cursor-default disabled:opacity-100"
               data-testid="button-novo-registro"
-              disabled
+              disabled={!canManage}
+              onClick={() => setRegistrationOpen(true)}
               type="button"
             >
               <Plus size={14} /> Novo Registro
@@ -244,6 +248,13 @@ export function Home() {
           )}
         </section>
       </main>
+      {canManage && (
+        <SessionRegistrationModal
+          open={registrationOpen}
+          onOpenChange={setRegistrationOpen}
+          teams={teams.data ?? []}
+        />
+      )}
     </div>
   );
 }

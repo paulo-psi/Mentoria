@@ -1,0 +1,84 @@
+### PRD TÉCNICO - PASSO 4.1: MODAL E FORMULÁRIO DE REGISTRO DE MENTORIA ("+ NOVO REGISTRO")
+
+Atue como Engenheiro de Software Sênior e Especialista em UI/UX. Sua tarefa exclusiva neste passo é ativar o botão "+ Novo Registro" no cabeçalho, implementando um modal de formulário completo, tipado e com validação Zod, conectado ao endpoint de criação de sessões via hook de mutação do Orval/React Query.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Permitir que a coordenação registre um encontro semanal com facilidade. Ao clicar em "+ Novo Registro", abre-se um modal limpo e espaçoso para selecionar a equipe, o mentor e a data, atribuir as 4 notas (0 a 10) e registrar os 4 pareceres qualitativos completos. Ao salvar com sucesso, os dados persistem no PostgreSQL e as queries do React Query são invalidadas, atualizando em tempo real os 4 cards de KPI, a tabela e o dossiê.
+
+---
+
+#### 2. STACK E GOVERNANÇA TÉCNICA
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`. Proibido `npm` ou `yarn`.
+- **Contrato OpenAPI & Mutação:**
+  - Verifique o endpoint de criação existente no contrato OpenAPI (ex.: `POST /api/teams/{teamId}/sessions` ou `POST /api/sessions`).
+  - Caso falte algum dos campos no contrato (as 4 notas numéricas ou os 4 campos de texto qualitativo), atualize primeiro a especificação OpenAPI YAML, execute o codegen (`pnpm run codegen`) e certifique-se de que a rota Express/Drizzle processe a gravação corretamente.
+  - Utilize o hook de mutação correspondente gerado pelo Orval no frontend.
+- **Gerenciamento de Formulário:** Utilize `react-hook-form` com resolver Zod (`@hookform/resolvers/zod`), derivando o schema de validação dos tipos gerados.
+- **Design System & Acessibilidade:**
+  - Modal com backdrop escurecido, fechamento por `Esc`, botão `X` ou cancelamento.
+  - Foco gerenciado e acessível.
+  - Paleta neutra (`zinc`/`slate`), bordas sutis `border-zinc-200`, cantos `rounded-xl`.
+
+---
+
+#### 3. ESTRUTURA E CAMPOS DO FORMULÁRIO
+
+O modal deve ser amplo (`max-w-3xl`) com rolagem interna suave, organizado visualmente em 4 blocos semânticos com divisores limpos:
+
+##### Bloco 1: Contexto do Encontro
+- **Equipe:** Seleção (`<select>`) com as 8 equipes cadastradas no banco (carregadas via `useGetTeams`).
+- **Mentor:** Seleção com os mentores cadastrados (carregados via `useGetMentors`). Ao selecionar a equipe, sugira ou destaque o mentor principal associado como opção padrão.
+- **Tipo de Mentoria:** Seleção ou radio pills com 3 opções claras:
+  - `Principal` (tutor fixo da startup)
+  - `Transversal` (mentor interno do programa atuando pontualmente)
+  - `Externo` (mentor convidado)
+- **Data da Sessão:** Campo de data (`type="date"`), pré-preenchido com a data atual no formato `YYYY-MM-DD`.
+
+##### Bloco 2: Avaliação da Equipe (Visão sobre o Mentor)
+- **NPS da Mentoria (0 a 10):** Seletor rápido horizontal com botões clicáveis de 0 a 10 (ou slider numérico limpo com feedback visual).
+- **Clareza / Acionabilidade (0 a 10):** Seletor rápido de 0 a 10.
+- **Pontos Fortes (Qualitativo):** Campo `<textarea>` confortável (mínimo 3 linhas) para registrar elogios e o que funcionou bem.
+- **Oportunidades de Melhoria (Qualitativo):** Campo `<textarea>` (mínimo 3 linhas) para pontos de atenção ou ajustes sugeridos pela equipe.
+
+##### Bloco 3: Avaliação do Mentor (Visão sobre a Equipe)
+- **Comprometimento da Equipe (0 a 10):** Seletor rápido de 0 a 10.
+- **Tração / Execução (0 a 10):** Seletor rápido de 0 a 10.
+- **Parecer Geral do Mentor:** Campo `<textarea>` amplo (mínimo 4 linhas) para o diagnóstico de maturidade e ritmo do time.
+
+##### Bloco 4: Próximos Passos
+- **Combinados e Próximos Passos:** Campo `<textarea>` destacado (mínimo 3 linhas) para os entregáveis acordados para a semana seguinte.
+
+##### Rodapé do Modal
+- Botão "Cancelar" (estilo neutro/outline).
+- Botão "Salvar Registro" (`bg-zinc-900 text-white`, com estado de spinner durante o envio para evitar submissões duplicadas).
+
+---
+
+#### 4. CICLO DE VIDA E ATUALIZAÇÃO DE CACHE (REACT QUERY)
+No callback `onSuccess` da mutação:
+1. Feche o modal e limpe os campos do formulário.
+2. Dispare a invalidação compulsória das seguintes queries no cache:
+   - `['/api/dashboard/stats']` (para recalcular os 4 KPIs imediatamente).
+   - `['/api/teams']` (para atualizar a última sessão e estágio na tabela executiva).
+   - `['/api/teams', teamId, 'sessions']` (para que o dossiê da equipe já mostre a nova mentoria).
+3. Exiba notificação sutil de sucesso (toast ou banner discreto).
+
+---
+
+#### 5. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] O botão "+ Novo Registro" no topo agora é ativo e abre o modal ao ser clicado.
+- [ ] O formulário impede o envio se campos obrigatórios estiverem vazios ou notas fora do intervalo [0, 10].
+- [ ] Uma nova mentoria enviada é gravada com sucesso no PostgreSQL através da API.
+- [ ] Ao salvar, os cards de KPI (total de sessões, médias e taxa de rede) e a tabela de equipes são atualizados na tela sem necessidade de recarregar a página (F5).
+- [ ] Ao abrir o Dossiê da equipe recém-atualizada, o novo encontro aparece no topo da linha do tempo com todos os textos preservados na íntegra.
+- [ ] `pnpm run typecheck` passa sem erros.
+- [ ] A suíte de testes (`pnpm test`) é atualizada e passa integralmente, cobrindo o fluxo de submissão do formulário.
+
+---
+
+#### 6. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO implemente edição ou exclusão de sessões já cadastradas.
+- NÃO crie cadastro de novos mentores ou novas equipes nesta etapa.
+- NÃO altere regras de autenticação ou papéis de usuário.
