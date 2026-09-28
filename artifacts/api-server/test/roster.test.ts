@@ -2668,6 +2668,158 @@ test("dashboard stats aggregate all sessions and count external mentors", async 
   }
 });
 
+test("approved users can read complete team session histories in reverse chronological order", async () => {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const seededTeams = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .orderBy(teamsTable.id)
+      .limit(3);
+    const [team, otherTeam, emptyTeam] = seededTeams;
+    assert.ok(team);
+    assert.ok(otherTeam);
+    assert.ok(emptyTeam);
+
+    const [internalMentor] = await db.insert(mentorsTable).values({
+      name: "History internal mentor",
+      email: null,
+      expertiseArea: "Operações & Produto",
+      mentorType: "interno",
+    }).returning();
+    const [externalMentor] = await db.insert(mentorsTable).values({
+      name: "History external mentor",
+      email: null,
+      expertiseArea: "Saúde & Produto",
+      mentorType: "externo",
+    }).returning();
+    assert.ok(internalMentor);
+    assert.ok(externalMentor);
+
+    const longQualitativeText = `Relato integral: ${"observação detalhada; ".repeat(420)}`;
+    const [olderSession, latestSession] = await db.insert(mentoringSessionsTable).values([
+      {
+        teamId: team.id,
+        mentorId: internalMentor.id,
+        sessionType: "principal",
+        sessionDate: "2026-03-23",
+        teamNps: 7,
+        teamActionability: 6,
+        mentorCommitment: 8,
+        mentorTraction: 7,
+        teamFeedbackStrongPoints: "A equipe validou a hipótese inicial.",
+        teamFeedbackImprovements: "Amostra de entrevistas ainda pequena.",
+        agreedNextSteps: "Concluir entrevistas com usuários.",
+        mentorQualitativeAssessment: "Há avanço consistente na validação.",
+        createdAt: new Date("2026-03-23T12:00:00.000Z"),
+      },
+      {
+        teamId: team.id,
+        mentorId: externalMentor.id,
+        sessionType: "transversal",
+        sessionDate: "2026-03-24",
+        teamNps: 10,
+        teamActionability: 9,
+        mentorCommitment: 8,
+        mentorTraction: 9,
+        teamFeedbackStrongPoints: longQualitativeText,
+        teamFeedbackImprovements: "Detalhar os critérios de priorização.",
+        agreedNextSteps: "Comparar os resultados do próximo experimento.",
+        mentorQualitativeAssessment: "A mentora trouxe recomendações práticas.",
+        createdAt: new Date("2026-03-24T18:00:00.000Z"),
+      },
+      {
+        teamId: otherTeam.id,
+        mentorId: internalMentor.id,
+        sessionType: "principal",
+        sessionDate: "2026-03-25",
+        teamNps: 5,
+        teamActionability: 5,
+        mentorCommitment: 5,
+        mentorTraction: 5,
+        teamFeedbackStrongPoints: "Outra equipe.",
+        teamFeedbackImprovements: "Outro relato.",
+        agreedNextSteps: "Outra tarefa.",
+        mentorQualitativeAssessment: "Outro parecer.",
+      },
+    ]).returning({ id: mentoringSessionsTable.id });
+    assert.ok(olderSession);
+    assert.ok(latestSession);
+
+    await start({ seed: false });
+    const path = `/teams/${team.id}/sessions`;
+    assert.equal((await request("GET", path)).status, 401);
+    assert.equal((await request("GET", path, undefined, "other")).status, 403);
+    assert.equal((await request("GET", "/teams/not-a-number/sessions", undefined, "reader")).status, 400);
+    assert.equal((await request("GET", "/teams/999999/sessions", undefined, "reader")).status, 404);
+
+    const history = await request("GET", path, undefined, "reader");
+    assert.equal(history.status, 200);
+    assert.deepEqual(history.body.map((session: { id: number }) => session.id), [
+      latestSession.id,
+      olderSession.id,
+    ]);
+    assert.deepEqual(history.body[0], {
+      id: latestSession.id,
+      sessionDate: "2026-03-24",
+      sessionType: "transversal",
+      mentor: {
+        id: externalMentor.id,
+        name: "History external mentor",
+        expertiseArea: "Saúde & Produto",
+        mentorType: "externo",
+      },
+      scores: {
+        teamNps: 10,
+        teamActionability: 9,
+        mentorCommitment: 8,
+        mentorTraction: 9,
+      },
+      qualitative: {
+        teamFeedbackStrongPoints: longQualitativeText,
+        teamFeedbackImprovements: "Detalhar os critérios de priorização.",
+        agreedNextSteps: "Comparar os resultados do próximo experimento.",
+        mentorQualitativeAssessment: "A mentora trouxe recomendações práticas.",
+      },
+      createdAt: "2026-03-24T18:00:00.000Z",
+    });
+
+    const emptyHistory = await request("GET", `/teams/${emptyTeam.id}/sessions`, undefined, "reader");
+    assert.equal(emptyHistory.status, 200);
+    assert.deepEqual(emptyHistory.body, []);
+  } finally {
+    await stop();
+    await clearRosterTables();
+  }
+});
+
+test("team session history returns 503 when the database is unavailable", async () => {
+  await clearRosterTables();
+  let queryMock: ReturnType<typeof mock.method> | undefined;
+  try {
+    await seedDatabase();
+    const [team] = await db.select({ id: teamsTable.id }).from(teamsTable).limit(1);
+    assert.ok(team);
+    await start({ seed: false });
+
+    queryMock = mock.method(pool, "query", async () => {
+      throw new Error("simulated database outage");
+    });
+    assert.deepEqual(
+      await request("GET", `/teams/${team.id}/sessions`, undefined, "reader"),
+      {
+        status: 503,
+        body: { error: "Não foi possível carregar o histórico de sessões agora." },
+      },
+    );
+  } finally {
+    queryMock?.mock.restore();
+    await stop();
+    await clearRosterTables();
+  }
+});
+
 test("administrators can record a transversal session and startup preserves it", async () => 
 {
 

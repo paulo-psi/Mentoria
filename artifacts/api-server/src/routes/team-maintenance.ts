@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import {
   CreateTeamBody,
@@ -8,6 +8,8 @@ import {
   CreateMentoringSessionResponse,
   DeleteTeamBody,
   DeleteTeamParams,
+  GetTeamSessionsParams,
+  GetTeamSessionsResponse,
   UpdateTeamBody,
   UpdateTeamParams,
   UpdateTeamResponse,
@@ -34,6 +36,93 @@ function isDatabaseError(error: unknown, code: string): boolean {
   if ("code" in error && error.code === code) return true;
   return "cause" in error && isDatabaseError(error.cause, code);
 }
+
+router.get("/teams/:teamId/sessions", requireApprovedUser, async (req, res): Promise<void> => {
+  const params = GetTeamSessionsParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "O identificador da equipe é inválido." });
+    return;
+  }
+
+  const result = await (async () => {
+    const [team] = await db
+      .select({ id: teamsTable.id })
+      .from(teamsTable)
+      .where(eq(teamsTable.id, params.data.teamId))
+      .limit(1);
+    if (!team) return { status: "not-found" as const };
+
+    const sessions = await db
+      .select({
+        id: mentoringSessionsTable.id,
+        sessionDate: mentoringSessionsTable.sessionDate,
+        sessionType: mentoringSessionsTable.sessionType,
+        mentorId: mentorsTable.id,
+        mentorName: mentorsTable.name,
+        mentorExpertiseArea: mentorsTable.expertiseArea,
+        mentorType: mentorsTable.mentorType,
+        teamNps: mentoringSessionsTable.teamNps,
+        teamActionability: mentoringSessionsTable.teamActionability,
+        mentorCommitment: mentoringSessionsTable.mentorCommitment,
+        mentorTraction: mentoringSessionsTable.mentorTraction,
+        teamFeedbackStrongPoints: mentoringSessionsTable.teamFeedbackStrongPoints,
+        teamFeedbackImprovements: mentoringSessionsTable.teamFeedbackImprovements,
+        agreedNextSteps: mentoringSessionsTable.agreedNextSteps,
+        mentorQualitativeAssessment: mentoringSessionsTable.mentorQualitativeAssessment,
+        createdAt: mentoringSessionsTable.createdAt,
+      })
+      .from(mentoringSessionsTable)
+      .innerJoin(mentorsTable, eq(mentorsTable.id, mentoringSessionsTable.mentorId))
+      .where(eq(mentoringSessionsTable.teamId, params.data.teamId))
+      .orderBy(
+        desc(mentoringSessionsTable.sessionDate),
+        desc(mentoringSessionsTable.createdAt),
+        desc(mentoringSessionsTable.id),
+      );
+    return { status: "loaded" as const, sessions };
+  })().catch((error: unknown) => {
+    req.log.error({ err: error, teamId: params.data.teamId }, "Failed to load team session history");
+    return { status: "unavailable" as const };
+  });
+
+  if (result.status === "unavailable") {
+    res.status(503).json({ error: "Não foi possível carregar o histórico de sessões agora." });
+    return;
+  }
+  if (result.status === "not-found") {
+    res.status(404).json({ error: "Equipe não encontrada." });
+    return;
+  }
+
+  const history = result.sessions.map((session) => ({
+    id: session.id,
+    sessionDate: session.sessionDate,
+    sessionType: session.sessionType,
+    mentor: {
+      id: session.mentorId,
+      name: session.mentorName,
+      expertiseArea: session.mentorExpertiseArea,
+      mentorType: session.mentorType,
+    },
+    scores: {
+      teamNps: session.teamNps,
+      teamActionability: session.teamActionability,
+      mentorCommitment: session.mentorCommitment,
+      mentorTraction: session.mentorTraction,
+    },
+    qualitative: {
+      teamFeedbackStrongPoints: session.teamFeedbackStrongPoints,
+      teamFeedbackImprovements: session.teamFeedbackImprovements,
+      agreedNextSteps: session.agreedNextSteps,
+      mentorQualitativeAssessment: session.mentorQualitativeAssessment,
+    },
+    createdAt: session.createdAt.toISOString(),
+  }));
+
+  // Validate the date-only contract but preserve the original YYYY-MM-DD strings in the JSON response.
+  GetTeamSessionsResponse.parse(history);
+  res.json(history);
+});
 
 router.post("/teams/:teamId/sessions", requireApprovedUser, requireAdministrator, async (req, res): Promise<void> => {
   const params = CreateMentoringSessionParams.safeParse(req.params);
