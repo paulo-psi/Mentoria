@@ -66,6 +66,9 @@ import healthRoutes,
  from "../src/routes/health"
 ;
 
+import dashboardRoutes from "../src/routes/dashboard"
+;
+
 import 
 {
  rosterWriteLock 
@@ -173,7 +176,7 @@ async function start({ seed = true }: { seed?: boolean } = {}) {
 )
 ;
 
-  app.use("/api", healthRoutes, listRoutes, teamRoutes, studentRoutes)
+  app.use("/api", healthRoutes, listRoutes, teamRoutes, dashboardRoutes, studentRoutes)
 ;
 
   server = app.listen(0)
@@ -2525,6 +2528,111 @@ test("team list reports separate session counts for official teams", async () =>
   }
 });
 
+
+test("dashboard stats require approved access and return zeroes without sessions", async () => {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    await start({ seed: false });
+
+    assert.equal((await request("GET", "/dashboard/stats")).status, 401);
+    assert.equal((await request("GET", "/dashboard/stats", undefined, "other")).status, 403);
+
+    const response = await request("GET", "/dashboard/stats", undefined, "reader");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, {
+      totalSessions: 0,
+      avgNps: 0,
+      avgTraction: 0,
+      networkOpennessRate: 0,
+    });
+  } finally {
+    await stop();
+    await clearRosterTables();
+  }
+});
+
+test("dashboard stats aggregate all sessions and count external mentors", async () => {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const [team] = await db.select({ id: teamsTable.id }).from(teamsTable).limit(1);
+    assert.ok(team, "the official roster must contain a team");
+
+    const [externalMentor] = await db.insert(mentorsTable).values({
+      name: "Dashboard external mentor",
+      email: null,
+      expertiseArea: null,
+      mentorType: "externo",
+    }).returning();
+    const [internalMentor] = await db.insert(mentorsTable).values({
+      name: "Dashboard internal mentor",
+      email: null,
+      expertiseArea: null,
+      mentorType: "interno",
+    }).returning();
+    assert.ok(externalMentor);
+    assert.ok(internalMentor);
+
+    await db.insert(mentoringSessionsTable).values([
+      {
+        teamId: team.id,
+        mentorId: externalMentor.id,
+        sessionType: "principal",
+        sessionDate: "2026-03-07",
+        teamNps: 9,
+        teamActionability: 8,
+        mentorCommitment: 8,
+        mentorTraction: 7,
+        teamFeedbackStrongPoints: "A equipe alinhou a estratégia.",
+        teamFeedbackImprovements: "Documentar melhor os experimentos.",
+        agreedNextSteps: "Revisar os resultados no próximo encontro.",
+        mentorQualitativeAssessment: "Acompanhamento consistente.",
+      },
+      {
+        teamId: team.id,
+        mentorId: internalMentor.id,
+        sessionType: "externo",
+        sessionDate: "2026-03-14",
+        teamNps: 8,
+        teamActionability: 8,
+        mentorCommitment: 9,
+        mentorTraction: 10,
+        teamFeedbackStrongPoints: "Boa participação dos estudantes.",
+        teamFeedbackImprovements: "Detalhar os próximos testes.",
+        agreedNextSteps: "Definir os indicadores do teste.",
+        mentorQualitativeAssessment: "A equipe respondeu bem às recomendações.",
+      },
+      {
+        teamId: team.id,
+        mentorId: internalMentor.id,
+        sessionType: "transversal",
+        sessionDate: "2026-03-21",
+        teamNps: 9,
+        teamActionability: 9,
+        mentorCommitment: 8,
+        mentorTraction: 8,
+        teamFeedbackStrongPoints: "A equipe trouxe dados recentes.",
+        teamFeedbackImprovements: "Ampliar a validação com usuários.",
+        agreedNextSteps: "Executar entrevistas com clientes.",
+        mentorQualitativeAssessment: "Evolução clara desde o último encontro.",
+      },
+    ]);
+
+    await start({ seed: false });
+    const response = await request("GET", "/dashboard/stats", undefined, "reader");
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, {
+      totalSessions: 3,
+      avgNps: 8.7,
+      avgTraction: 8.3,
+      networkOpennessRate: 33.3,
+    });
+  } finally {
+    await stop();
+    await clearRosterTables();
+  }
+});
 
 test("administrators can record a transversal session and startup preserves it", async () => 
 {

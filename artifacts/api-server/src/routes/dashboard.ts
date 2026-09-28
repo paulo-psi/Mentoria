@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { Router, type IRouter } from "express";
-import { ErrorResponse, GetDashboardStatsResponse } from "@workspace/api-zod";
+import { GetDashboardStatsResponse } from "@workspace/api-zod";
 import { db, mentorsTable, mentoringSessionsTable } from "@workspace/db";
 import { requireApprovedUser } from "../middlewares/requireApprovedUser";
 
@@ -39,9 +39,9 @@ router.get("/dashboard/stats", requireApprovedUser, async (req, res): Promise<vo
     }));
   } catch (error) {
     req.log.error({ err: error }, "Failed to load dashboard metrics");
-    res.status(503).json(ErrorResponse.parse({
+    res.status(503).json({
       error: "Não foi possível carregar as métricas do painel agora.",
-    }));
+    });
   }
 });
 
