@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Student, Team } from '@workspace/api-client-react';
 
-async function mockRosterApi(page: Page, canManage = true) {
+async function mockRosterApi(page: Page, canManage = true, { accessFails = false }: { accessFails?: boolean } = {}) {
   const team: Team = {
     id: 1,
     name: 'Equipe Horizonte',
@@ -30,7 +30,14 @@ async function mockRosterApi(page: Page, canManage = true) {
     let data: unknown;
     let status = 200;
 
-    if (method === 'GET' && pathname === '/api/access') data = { canManage };
+    if (method === 'GET' && pathname === '/api/access') {
+      if (accessFails) {
+        status = 503;
+        data = { error: 'Permission check unavailable' };
+      } else {
+        data = { canManage };
+      }
+    }
     else if (method === 'GET' && pathname === '/api/healthz') data = { status: 'ok' };
     else if (method === 'GET' && pathname === '/api/health') data = { status: 'ok', database: 'connected' };
     else if (method === 'GET' && pathname === '/api/teams') data = [team];
@@ -106,6 +113,34 @@ test('signed-in view-only user can see the roster but cannot open maintenance', 
   await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
   await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
   expect(api.mutationRequests, 'view-only navigation must not change the roster').toEqual([]);
+  expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('failed permission check keeps maintenance unavailable to a signed-in user', async ({ page }) => {
+  const api = await mockRosterApi(page, true, { accessFails: true });
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  const failedAccess = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/access' && response.status() === 503,
+  );
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await failedAccess;
+  await expect(page.getByTestId('card-equipe-1')).toBeVisible();
+  await expect(page.getByTestId('link-manter-equipes')).toHaveCount(0);
+
+  await page.goto('/manage');
+  await expect(page).toHaveURL(/\/manage$/);
+  await expect(page.getByTestId('state-sem-permissao-manage')).toContainText('Não foi possível conferir seu acesso.', { timeout: 15_000 });
+  await expect(page.getByTestId('state-sem-permissao-manage')).toContainText('A manutenção não está disponível enquanto a permissão não puder ser verificada.');
+  await expect(page.getByTestId('button-tentar-acesso')).toBeVisible();
+  await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
+  await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
+  await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
+  await expect(page.getByTestId('button-salvar-estudante-1')).toHaveCount(0);
+  await expect(page.getByTestId('button-editar-estudante-1')).toHaveCount(0);
+  expect(api.mutationRequests, 'a failed permission check must not change the roster').toEqual([]);
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
 
