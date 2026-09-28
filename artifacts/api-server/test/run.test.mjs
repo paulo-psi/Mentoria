@@ -129,6 +129,7 @@ function createHarness(mode) {
       if (this.isAdmin && (
         mode === "admin-end" ||
         mode === "multiple-cleanup-and-admin-end-failures" ||
+        mode === "signal-schema-generation-and-admin-end-failure" ||
         mode === "signal-test-process-and-admin-end-failure" ||
         mode === "nonzero-roster-and-admin-end-failure" ||
         mode === "temp-directory-create-and-admin-end-failure"
@@ -177,7 +178,10 @@ function createHarness(mode) {
   const spawn = (_command, args) => {
     if (args.includes("generate")) {
       let result;
-      if (mode === "signal-schema-generation") {
+      if (
+        mode === "signal-schema-generation" ||
+        mode === "signal-schema-generation-and-admin-end-failure"
+      ) {
         result = { status: null, signal: "SIGTERM" };
       } else {
         result = { status: mode === "generate-schema" ? 3 : 0 };
@@ -327,6 +331,36 @@ test("schema generation interruption identifies the signal and removes resources
   assert.equal(harness.state.fixtureQueries.length, 0);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
+});
+
+test("schema generation interruption remains visible when the administrative connection cannot close", async () => {
+  const harness = createHarness("signal-schema-generation-and-admin-end-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.cause, error.errors[0]);
+    assert.match(error.cause.message, /schema generation was terminated by signal SIGTERM/);
+    assert.equal(error.cause.signal, "SIGTERM");
+    assert.equal(error.cause.exitCode, 1);
+    assert.match(error.errors[1].message, /simulated administrative connection close failure/);
+    return true;
+  });
+
+  assert.deepEqual(harness.state.schemaGenerationResults, [{ status: null, signal: "SIGTERM" }]);
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.runTestProcess, false, "roster tests did not start");
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "connection termination was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  assert.deepEqual(
+    harness.state.droppedDatabases,
+    harness.state.createdDatabases,
+    "the disposable database was dropped",
+  );
+  assert.equal(harness.state.adminEnded, true, "the administrative connection close was attempted");
+  assert.equal(harness.state.tempDirectories.length, 1);
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("administrative connection failure closes the client and removes temporary files", async () => {
