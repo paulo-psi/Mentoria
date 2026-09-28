@@ -25,6 +25,8 @@ import type {
   GetRosterAuditParams,
   HealthStatus,
   MentorOption,
+  MentoringSession,
+  MentoringSessionInput,
   RosterAuditEvent,
   ServerStatus,
   Student,
@@ -735,6 +737,95 @@ export const useCreateStudent = <TError = ErrorType<ErrorResponse | void>,
         TContext
       > => {
       return useMutation(getCreateStudentMutationOptions(options));
+    }
+
+export const getCreateMentoringSessionUrl = (teamId: number,) => {
+
+
+
+
+  return `/api/teams/${teamId}/sessions`
+}
+
+/**
+ * @summary Record a mentoring session for a team
+ */
+export const createMentoringSession = async (teamId: number,
+    mentoringSessionInput: MentoringSessionInput, options?: Parameters<typeof customFetch>[1]): Promise<MentoringSession> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MentoringSession>(getCreateMentoringSessionUrl(teamId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(mentoringSessionInput)
+  }
+);}
+
+
+
+
+
+export const getCreateMentoringSessionMutationKey = () => ['createMentoringSession'] as const;
+
+export const getCreateMentoringSessionMutationOptions = <TError = ErrorType<ErrorResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMentoringSession>>, TError,CreateMentoringSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createMentoringSession>>, TError,CreateMentoringSessionMutationVariables, TContext> => {
+
+const mutationKey = getCreateMentoringSessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createMentoringSession>>, CreateMentoringSessionMutationVariables> = (props) => {
+          const {teamId,data} = props ?? {};
+
+          return  createMentoringSession(teamId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateMentoringSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createMentoringSession>>>
+    export type CreateMentoringSessionMutationBody = BodyType<MentoringSessionInput>
+    export type CreateMentoringSessionMutationError = ErrorType<ErrorResponse | void>
+    export type CreateMentoringSessionMutationVariables = {teamId: number;data: BodyType<MentoringSessionInput>}
+
+    /**
+ * @summary Record a mentoring session for a team
+ */
+export const useCreateMentoringSession = <TError = ErrorType<ErrorResponse | void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createMentoringSession>>, TError,CreateMentoringSessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createMentoringSession>>,
+        TError,
+        CreateMentoringSessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateMentoringSessionMutationOptions(options));
     }
 
 export const getUpdateStudentUrl = (teamId: number,

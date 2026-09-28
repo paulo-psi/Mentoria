@@ -19,6 +19,7 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     sessionCount: 0,
   };
   const createdNames: string[] = [];
+  const sessionRequests: Array<Record<string, unknown>> = [];
   const renameRequests: Array<{ name: string; expectedName: string }> = [];
   const mutationRequests: string[] = [];
   const unexpectedRequests: string[] = [];
@@ -41,8 +42,18 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     else if (method === 'GET' && pathname === '/api/healthz') data = { status: 'ok' };
     else if (method === 'GET' && pathname === '/api/health') data = { status: 'ok', database: 'connected' };
     else if (method === 'GET' && pathname === '/api/teams') data = [team];
-    else if (method === 'GET' && pathname === '/api/mentors') data = [{ id: 1, name: 'Mentora de Teste' }];
+    else if (method === 'GET' && pathname === '/api/mentors') data = [
+      { id: 1, name: 'Mentora de Teste' },
+      { id: 2, name: 'Mentor Transversal' },
+    ];
     else if (method === 'GET' && pathname === '/api/roster-audit') data = [];
+    else if (canManage && method === 'POST' && pathname === '/api/teams/1/sessions') {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      sessionRequests.push(body);
+      team.sessionCount += 1;
+      status = 201;
+      data = { id: 1, teamId: 1, ...body, createdAt: '2026-03-01T12:00:00.000Z' };
+    }
     else if (canManage && method === 'POST' && pathname === '/api/teams/1/students') {
       const body = route.request().postDataJSON() as { name: string };
       createdNames.push(body.name);
@@ -72,6 +83,7 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
 
   return {
     createdNames,
+    sessionRequests,
     renameRequests,
     mutationRequests,
     unexpectedRequests,
@@ -112,6 +124,7 @@ test('signed-in view-only user can see the roster but cannot open maintenance', 
   await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
   await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
   await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
+  await expect(page.getByTestId('button-salvar-sessao-1')).toHaveCount(0);
   expect(api.mutationRequests, 'view-only navigation must not change the roster').toEqual([]);
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
@@ -165,6 +178,52 @@ test('test manager signs in, adds a student and sees the saved roster after relo
   await page.reload();
   await page.getByTestId('button-selecionar-equipe-1').click();
   await expect(page.getByTestId('text-estudante-2')).toHaveText('Marina Costa');
+  expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('administrator records a transversal session with another mentor', async ({ page }) => {
+  const api = await mockRosterApi(page);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await page.getByTestId('link-manter-equipes').click();
+  await expect(page).toHaveURL(/\/manage$/);
+  await page.getByTestId('button-selecionar-equipe-1').click();
+
+  await page.getByTestId('select-tipo-sessao-1').selectOption('transversal');
+  await page.getByTestId('input-data-sessao-1').fill('2026-03-04');
+  await page.getByTestId('select-mentor-sessao-1').selectOption('2');
+  await page.getByTestId('select-teamNps-sessao-1').selectOption('9');
+  await page.getByTestId('select-teamActionability-sessao-1').selectOption('8');
+  await page.getByTestId('select-mentorCommitment-sessao-1').selectOption('7');
+  await page.getByTestId('select-mentorTraction-sessao-1').selectOption('9');
+  await page.getByTestId('textarea-teamFeedbackStrongPoints-1').fill('A equipe trouxe bons exemplos.');
+  await page.getByTestId('textarea-teamFeedbackImprovements-1').fill('Definir métricas mais claras.');
+  await page.getByTestId('textarea-agreedNextSteps-1').fill('Testar a hipótese nesta semana.');
+  await page.getByTestId('textarea-mentorQualitativeAssessment-1').fill('A equipe demonstrou progresso.');
+  await page.getByTestId('button-salvar-sessao-1').click();
+
+  await expect(page.getByTestId('text-sessoes-1')).toContainText('1 sessão registrada');
+  await expect(page.getByTestId('status-alteracao')).toContainText('Sessão registrada na equipe.');
+  expect(api.sessionRequests).toEqual([{
+    sessionType: 'transversal',
+    sessionDate: '2026-03-04',
+    mentorId: 2,
+    teamNps: 9,
+    teamActionability: 8,
+    mentorCommitment: 7,
+    mentorTraction: 9,
+    teamFeedbackStrongPoints: 'A equipe trouxe bons exemplos.',
+    teamFeedbackImprovements: 'Definir métricas mais claras.',
+    agreedNextSteps: 'Testar a hipótese nesta semana.',
+    mentorQualitativeAssessment: 'A equipe demonstrou progresso.',
+  }]);
+
+  await page.reload();
+  await page.getByTestId('button-selecionar-equipe-1').click();
+  await expect(page.getByTestId('text-sessoes-1')).toContainText('1 sessão registrada');
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
 

@@ -240,6 +240,43 @@ paths:
           description: Administrator access required
         "404":
           description: Team not found
+  /teams/{teamId}/sessions:
+    post:
+      operationId: createMentoringSession
+      tags: [teams]
+      summary: Record a mentoring session for a team
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentoringSessionInput"
+      responses:
+        "201":
+          description: Mentoring session recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentoringSession"
+        "400":
+          description: Invalid session data or unavailable mentor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "404":
+          description: Team not found
   /teams/{teamId}/students/{studentId}:
     patch:
       operationId: updateStudent
@@ -517,6 +554,119 @@ components:
           type: integer
           minimum: 1
       required: [expectedName, expectedMainMentorId]
+    MentoringSession:
+      type: object
+      properties:
+        id:
+          type: integer
+        teamId:
+          type: integer
+        mentorId:
+          type: integer
+        sessionType:
+          type: string
+          enum: [principal, transversal, externo]
+        sessionDate:
+          type: string
+          format: date
+        teamNps:
+          type: integer
+          minimum: 0
+          maximum: 10
+        teamActionability:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorCommitment:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorTraction:
+          type: integer
+          minimum: 0
+          maximum: 10
+        teamFeedbackStrongPoints:
+          type: string
+        teamFeedbackImprovements:
+          type: string
+        agreedNextSteps:
+          type: string
+        mentorQualitativeAssessment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - teamId
+        - mentorId
+        - sessionType
+        - sessionDate
+        - teamNps
+        - teamActionability
+        - mentorCommitment
+        - mentorTraction
+        - teamFeedbackStrongPoints
+        - teamFeedbackImprovements
+        - agreedNextSteps
+        - mentorQualitativeAssessment
+        - createdAt
+    MentoringSessionInput:
+      type: object
+      properties:
+        mentorId:
+          type: integer
+          minimum: 1
+        sessionType:
+          type: string
+          enum: [principal, transversal, externo]
+        sessionDate:
+          type: string
+          format: date
+        teamNps:
+          type: integer
+          minimum: 0
+          maximum: 10
+        teamActionability:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorCommitment:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorTraction:
+          type: integer
+          minimum: 0
+          maximum: 10
+        teamFeedbackStrongPoints:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        teamFeedbackImprovements:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        agreedNextSteps:
+          type: string
+          minLength: 1
+          maxLength: 5000
+        mentorQualitativeAssessment:
+          type: string
+          minLength: 1
+          maxLength: 5000
+      required:
+        - mentorId
+        - sessionType
+        - sessionDate
+        - teamNps
+        - teamActionability
+        - mentorCommitment
+        - mentorTraction
+        - teamFeedbackStrongPoints
+        - teamFeedbackImprovements
+        - agreedNextSteps
+        - mentorQualitativeAssessment
     StudentSnapshot:
       type: object
       properties:

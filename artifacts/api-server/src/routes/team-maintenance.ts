@@ -3,6 +3,9 @@ import { Router, type IRouter } from "express";
 import {
   CreateTeamBody,
   CreateTeamResponse,
+  CreateMentoringSessionBody,
+  CreateMentoringSessionParams,
+  CreateMentoringSessionResponse,
   DeleteTeamBody,
   DeleteTeamParams,
   UpdateTeamBody,
@@ -12,6 +15,7 @@ import {
 import {
   db,
   insertStudentSchema,
+  insertMentoringSessionSchema,
   insertTeamSchema,
   mentorsTable,
   mentoringSessionsTable,
@@ -30,6 +34,70 @@ function isDatabaseError(error: unknown, code: string): boolean {
   if ("code" in error && error.code === code) return true;
   return "cause" in error && isDatabaseError(error.cause, code);
 }
+
+router.post("/teams/:teamId/sessions", requireApprovedUser, requireAdministrator, async (req, res): Promise<void> => {
+  const params = CreateMentoringSessionParams.safeParse(req.params);
+  const body = CreateMentoringSessionBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Informe os dados da sessão em formato válido." });
+    return;
+  }
+  const sessionData = insertMentoringSessionSchema.safeParse({
+    ...body.data,
+    teamId: params.data.teamId,
+    // The generated OpenAPI validator coerces date strings to Date.
+    // Re-validate the original full-date string with the DB schema.
+    sessionDate: req.body.sessionDate,
+  });
+  if (!sessionData.success) {
+    res.status(400).json({ error: "A data, as notas ou os relatos da sessão estão inválidos." });
+    return;
+  }
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(rosterWriteLock);
+      const [team] = await tx
+        .select({ id: teamsTable.id })
+        .from(teamsTable)
+        .where(eq(teamsTable.id, params.data.teamId))
+        .for("update");
+      if (!team) return { status: "not-found" } as const;
+
+      const [mentor] = await tx
+        .select({ id: mentorsTable.id })
+        .from(mentorsTable)
+        .where(eq(mentorsTable.id, body.data.mentorId))
+        .limit(1);
+      if (!mentor) return { status: "invalid-mentor" } as const;
+
+      const [session] = await tx
+        .insert(mentoringSessionsTable)
+        .values({ ...sessionData.data, teamId: team.id })
+        .returning();
+      return { status: "created", session } as const;
+    });
+
+    if (result.status === "not-found") {
+      res.status(404).json({ error: "Equipe não encontrada." });
+      return;
+    }
+    if (result.status === "invalid-mentor") {
+      res.status(400).json({ error: "O mentor selecionado não existe." });
+      return;
+    }
+
+    const response = CreateMentoringSessionResponse.parse(result.session);
+    req.log.info({ teamId: result.session.teamId, sessionId: result.session.id }, "Mentoring session recorded");
+    res.status(201).json({ ...response, sessionDate: result.session.sessionDate });
+  } catch (error) {
+    if (isDatabaseError(error, "23503")) {
+      res.status(400).json({ error: "A equipe ou o mentor selecionado não está mais disponível." });
+      return;
+    }
+    throw error;
+  }
+});
 
 router.post("/teams", requireApprovedUser, requireAdministrator, async (req, res): Promise<void> => {
   const body = CreateTeamBody.safeParse(req.body);
