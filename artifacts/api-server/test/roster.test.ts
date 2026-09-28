@@ -297,6 +297,31 @@ async function assertLegacyDataPreservedAfterChange(
   }
 }
 
+async function assertOfficialDataPreservedAfterRename(
+  rename: (official: Awaited<ReturnType<typeof rosterSnapshot>>) => Promise<unknown>,
+) {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    await rename(official);
+    const beforeSeed = await rosterSnapshot();
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "renaming one official record must preserve mentors, teams, students and sessions",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+}
+
 test("only the complete legacy demo migrates; any changed legacy data is preserved", async () => {
   await clearRosterTables();
   try {
@@ -556,6 +581,32 @@ test("renaming one legacy mentor or team preserves every roster table on startup
       await db.update(teamsTable)
         .set({ name: "Verdeira (renomeada)" })
         .where(eq(teamsTable.id, teams[0].id));
+    });
+  });
+});
+
+test("renaming one official mentor or team preserves every roster table on startup", async (t) => {
+  await t.test("mentor name changes alone", async () => {
+    await assertOfficialDataPreservedAfterRename(async ({ mentors }) => {
+      const mentor = mentors.find(({ name }) => name === officialTeams[0].mentor);
+      assert.ok(mentor);
+      const renamed = await db.update(mentorsTable)
+        .set({ name: `${mentor.name} (renomeada)` })
+        .where(eq(mentorsTable.id, mentor.id))
+        .returning();
+      assert.equal(renamed.length, 1);
+    });
+  });
+
+  await t.test("team name changes alone", async () => {
+    await assertOfficialDataPreservedAfterRename(async ({ teams }) => {
+      const team = teams.find(({ name }) => name === officialTeams[0].name);
+      assert.ok(team);
+      const renamed = await db.update(teamsTable)
+        .set({ name: `${team.name} (renomeada)` })
+        .where(eq(teamsTable.id, team.id))
+        .returning();
+      assert.equal(renamed.length, 1);
     });
   });
 });
