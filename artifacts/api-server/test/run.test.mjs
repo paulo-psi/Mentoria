@@ -10,6 +10,7 @@ const failureSteps = new Set([
   "adminConnect",
   "fixtureConnect",
   "securityQuery",
+  "createDatabase",
   "terminateConnections",
   "dropDatabase",
   "fixtureVerificationQuery",
@@ -44,6 +45,8 @@ function createHarness({
     fixtureConnectedDatabase: null,
     fixtureReadAttempts: 0,
     createdDatabases: [],
+    createDatabaseAttempts: 0,
+    createDatabaseError: new Error("simulated database creation failure"),
     droppedDatabases: [],
     dropDatabaseAttempts: 0,
     terminateConnectionAttempts: 0,
@@ -108,6 +111,10 @@ function createHarness({
         }
         const create = sql.match(/^CREATE DATABASE "([^"]+)"$/);
         if (create) {
+          state.createDatabaseAttempts += 1;
+          if (fails.has("createDatabase")) {
+            throw state.createDatabaseError;
+          }
           state.createdDatabases.push(create[1]);
           return { rows: [] };
         }
@@ -325,6 +332,32 @@ test("temporary-directory creation error remains primary when closing admin also
   assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
   assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
   assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+});
+
+test("database creation failure closes the admin client and removes temporary files before fixtures", async () => {
+  const harness = createHarness({ fail: ["createDatabase"] });
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.equal(error, harness.state.createDatabaseError);
+    return true;
+  });
+
+  assert.equal(harness.state.adminConnectAttempts, 1, "the administrative connection was opened");
+  assert.equal(harness.state.createDatabaseAttempts, 1, "database creation was attempted");
+  assert.deepEqual(harness.state.createdDatabases, [], "no disposable database was created");
+  assert.equal(harness.state.terminateConnectionAttempts, 0, "there is no database to disconnect");
+  assert.equal(harness.state.dropDatabaseAttempts, 0, "there is no database to drop");
+  assert.equal(harness.state.clientCreations, 1, "no fixture client was created");
+  assert.equal(harness.state.fixtureConnectAttempts, 0, "fixture setup did not start");
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.tempConfigWriteAttempts, 0, "temporary config was not written");
+  assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation did not start");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+  assert.equal(harness.state.tempDirectories.length, 1, "one temporary directory was created");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("temporary config write failure removes the disposable database and all temporary resources", async () => {
