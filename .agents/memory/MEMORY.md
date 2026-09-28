@@ -2,4 +2,5 @@
 - [Drizzle CLI limitations](drizzle-cli.md) — schema generation rejects combined config/output flags; invoke the installed CLI rather than resolving its private entrypoint.
 - [PostgreSQL URL database precedence](pg-url-database-precedence.md) — the installed pg client and conservative fake disagree about conflicting URL database options.
 - [Release gate scope](release-gate-scope.md) — GitHub tag releases can require CI, but Replit Publish is a separate user action and is not blocked by GitHub checks.
+- [GitHub repository rulesets](github-repository-rulesets.md) — private-repo plan limits and ruleset checks differ from classic branch protection.
 - [Workspace package installation](workspace-package-installation.md) — the package-install callback targets the workspace root; filtered pnpm commands are needed for artifact-only dependencies.
