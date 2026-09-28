@@ -97,7 +97,10 @@ test("the release job runs and requires the eligibility test before publishing",
   const publishStepStart = releaseJob.indexOf("- name: Publish only after live isolation succeeds");
 
   assert.match(workflow, /release-gate-validation:[\s\S]*?node --test \.github\/workflows\/release-gate\.test\.mjs/);
-  assert.match(releaseJob, /needs: \[live-database-isolation, release-gate-validation\]/);
+  assert.match(
+    releaseJob,
+    /needs: \[live-database-isolation, release-gate-validation, workflow-lint\]/,
+  );
   assert.ok(
     gateStepStart >= 0 && publishStepStart > gateStepStart &&
       gateStep >= gateStepStart && publishStep > publishStepStart,
@@ -108,4 +111,19 @@ test("the release job runs and requires the eligibility test before publishing",
     /^\s*(?:if|continue-on-error):/m,
     "the eligibility step must not be skipped or ignored",
   );
+});
+
+test("GitHub Actions workflows are linted in CI and block release on failure", async () => {
+  const workflow = await readFile(workflowPath, "utf8");
+  const lintJobStart = workflow.indexOf("\n  workflow-lint:\n");
+  const releaseJobStart = workflow.indexOf("\n  release:\n");
+  assert.ok(lintJobStart >= 0 && releaseJobStart > lintJobStart);
+  const lintJob = workflow.slice(lintJobStart, releaseJobStart);
+
+  assert.match(lintJob, /name: Lint GitHub Actions workflows/);
+  assert.match(
+    lintJob,
+    /go install github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12/,
+  );
+  assert.match(lintJob, /"\$\(go env GOPATH\)\/bin\/actionlint"/);
 });
