@@ -18,6 +18,8 @@ tags:
     description: Available mentors
   - name: audit
     description: Administrator-only roster history
+  - name: dashboard
+    description: Aggregated mentoring metrics
 paths:
   /roster-audit:
     get:
@@ -77,6 +79,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get aggregated mentoring metrics
+      description: >-
+        Aggregates every mentoring session. The network openness rate is the
+        percentage of sessions led by mentors whose type is external. Averages
+        and rate are rounded to one decimal place; all metrics are zero when
+        there are no sessions.
+      responses:
+        "200":
+          description: Aggregated dashboard metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+        "401":
+          description: Sign in required
+        "403":
+          description: Approved Hub access required
+        "503":
+          description: Database is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /teams:
     get:
       operationId: getTeams
@@ -724,4 +753,23 @@ components:
           minLength: 1
           maxLength: 200
       required: [expectedName]
+    DashboardStats:
+      type: object
+      properties:
+        totalSessions:
+          type: integer
+          minimum: 0
+        avgNps:
+          type: number
+          minimum: 0
+          maximum: 10
+        avgTraction:
+          type: number
+          minimum: 0
+          maximum: 10
+        networkOpennessRate:
+          type: number
+          minimum: 0
+          maximum: 100
+      required: [totalSessions, avgNps, avgTraction, networkOpennessRate]
 

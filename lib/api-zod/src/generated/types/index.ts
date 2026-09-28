@@ -7,6 +7,7 @@
  */
 
 export * from './accessPermissions';
+export * from './dashboardStats';
 export * from './errorResponse';
 export * from './getRosterAuditParams';
 export * from './healthStatus';

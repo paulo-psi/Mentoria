@@ -286,6 +286,26 @@ export interface StudentDeleteInput {
   expectedName: string;
 }
 
+export interface DashboardStats {
+  /** @minimum 0 */
+  totalSessions: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  avgNps: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  avgTraction: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  networkOpennessRate: number;
+}
+
 export type GetRosterAuditParams = {
 /**
  * @minimum 1

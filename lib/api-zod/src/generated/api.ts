@@ -51,6 +51,31 @@ export const GetHealthResponse = zod.object({
 
 
 /**
+ * Aggregates every mentoring session. The network openness rate is the percentage of sessions led by mentors whose type is external. Averages and rate are rounded to one decimal place; all metrics are zero when there are no sessions.
+ * @summary Get aggregated mentoring metrics
+ */
+export const getDashboardStatsResponseTotalSessionsMin = 0;
+
+export const getDashboardStatsResponseAvgNpsMin = 0;
+export const getDashboardStatsResponseAvgNpsMax = 10;
+
+export const getDashboardStatsResponseAvgTractionMin = 0;
+export const getDashboardStatsResponseAvgTractionMax = 10;
+
+export const getDashboardStatsResponseNetworkOpennessRateMin = 0;
+export const getDashboardStatsResponseNetworkOpennessRateMax = 100;
+
+
+
+export const GetDashboardStatsResponse = zod.object({
+  "totalSessions": zod.number().int().min(getDashboardStatsResponseTotalSessionsMin),
+  "avgNps": zod.number().min(getDashboardStatsResponseAvgNpsMin).max(getDashboardStatsResponseAvgNpsMax),
+  "avgTraction": zod.number().min(getDashboardStatsResponseAvgTractionMin).max(getDashboardStatsResponseAvgTractionMax),
+  "networkOpennessRate": zod.number().min(getDashboardStatsResponseNetworkOpennessRateMin).max(getDashboardStatsResponseNetworkOpennessRateMax)
+})
+
+
+/**
  * Returns each team with its lead mentor, ordered students, and session count.
  * @summary List mentoring teams
  */
