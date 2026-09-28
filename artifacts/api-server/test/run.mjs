@@ -33,12 +33,13 @@ export async function runRosterTests({
 
   const databaseName = `roster_test_${randomUUID().replaceAll("-", "")}`;
   const admin = new Client({ connectionString: env.DATABASE_URL });
-  const workingDir = await fs.mkdtemp(path.join(tempDirectory, "roster-test-"));
+  let workingDir;
   let created = false;
   let result;
   let operationError;
 
   try {
+    workingDir = await fs.mkdtemp(path.join(tempDirectory, "roster-test-"));
     await admin.connect();
     const securityCheck = await admin.query(
       "select current_database(), rolcreatedb from pg_roles where rolname = current_user",
@@ -176,7 +177,9 @@ globalThis.require = __createRequire(import.meta.url);`,
     await attemptCleanup(() => admin.query(`DROP DATABASE "${databaseName}"`));
   }
   await attemptCleanup(() => admin.end());
-  await attemptCleanup(() => fs.rm(workingDir, { recursive: true, force: true }));
+  if (workingDir) {
+    await attemptCleanup(() => fs.rm(workingDir, { recursive: true, force: true }));
+  }
 
   if (cleanupErrors.length > 0 && (operationError || result !== 0)) {
     const primaryError = operationError ?? Object.assign(

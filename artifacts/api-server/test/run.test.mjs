@@ -23,8 +23,10 @@ function createHarness(mode) {
     testProcessStartAttempts: 0,
     bundleAttempts: 0,
     schemaGenerationResults: [],
+    tempDirectoryCreationAttempts: 0,
     tempDirectories: [],
     tempDirectoryRemovalAttempts: 0,
+    tempDirectoryCreationError: new Error("simulated temporary-directory creation failure"),
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
   };
 
@@ -128,7 +130,8 @@ function createHarness(mode) {
         mode === "admin-end" ||
         mode === "multiple-cleanup-and-admin-end-failures" ||
         mode === "signal-test-process-and-admin-end-failure" ||
-        mode === "nonzero-roster-and-admin-end-failure"
+        mode === "nonzero-roster-and-admin-end-failure" ||
+        mode === "temp-directory-create-and-admin-end-failure"
       )) {
         throw new Error("simulated administrative connection close failure");
       }
@@ -144,6 +147,13 @@ function createHarness(mode) {
 
   const fs = {
     mkdtemp: async (prefix) => {
+      state.tempDirectoryCreationAttempts += 1;
+      if (
+        mode === "temp-directory-create" ||
+        mode === "temp-directory-create-and-admin-end-failure"
+      ) {
+        throw state.tempDirectoryCreationError;
+      }
       const tempDir = await mkdtemp(prefix);
       state.tempDirectories.push(tempDir);
       return tempDir;
@@ -245,6 +255,52 @@ async function assertSecurityCheckCleanup(harness) {
   assert.equal(harness.state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 }
+
+test("temporary-directory creation failure closes the admin client without starting tests", async () => {
+  const harness = createHarness("temp-directory-create");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.equal(error, harness.state.tempDirectoryCreationError);
+    return true;
+  });
+
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the injected administrative client is created");
+  assert.equal(harness.state.adminConnectAttempts, 0, "the database connection was not started");
+  assert.equal(harness.state.fixtureConnectAttempts, 0, "no fixture client was started");
+  assert.equal(harness.state.adminEnded, true, "the administrative client was closed");
+  assert.equal(harness.state.tempDirectoryCreationAttempts, 1, "temporary-directory creation was attempted");
+  assert.equal(harness.state.tempDirectories.length, 0, "no temporary directory was created");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 0, "there is no directory to remove");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
+  assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+});
+
+test("temporary-directory creation error remains primary when closing admin also fails", async () => {
+  const harness = createHarness("temp-directory-create-and-admin-end-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.errors[0], harness.state.tempDirectoryCreationError);
+    assert.match(error.errors[1].message, /simulated administrative connection close failure/);
+    assert.equal(error.cause, harness.state.tempDirectoryCreationError);
+    return true;
+  });
+
+  assertNoDatabaseOrFixturesWereCreated(harness.state);
+  assert.equal(harness.state.clientCreations, 1, "only the injected administrative client is created");
+  assert.equal(harness.state.adminConnectAttempts, 0, "the database connection was not started");
+  assert.equal(harness.state.fixtureConnectAttempts, 0, "no fixture client was started");
+  assert.equal(harness.state.adminEnded, true, "the administrative close was attempted");
+  assert.equal(harness.state.tempDirectoryCreationAttempts, 1, "temporary-directory creation was attempted");
+  assert.equal(harness.state.tempDirectories.length, 0, "no temporary directory was created");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 0, "there is no directory to remove");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
+  assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+});
 
 test("schema generation failure removes the generated database and temporary files", async () => {
   const harness = createHarness("generate-schema");
