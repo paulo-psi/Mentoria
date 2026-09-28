@@ -68,6 +68,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run web tests
         run: pnpm --filter @workspace/hub-mentorias run test
+      - name: Install Chromium for browser tests
+        run: pnpm --filter @workspace/hub-mentorias exec playwright install --with-deps chromium
+      - name: Test sign-in and roster flows in Chromium
+        run: pnpm --filter @workspace/hub-mentorias run test:e2e
       - name: Typecheck web
         run: pnpm --filter @workspace/hub-mentorias run typecheck
       - name: Build web

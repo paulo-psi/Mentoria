@@ -4,3 +4,4 @@
 - [Release gate scope](release-gate-scope.md) — GitHub tag releases can require CI, but Replit Publish is a separate user action and is not blocked by GitHub checks.
 - [GitHub repository rulesets](github-repository-rulesets.md) — private-repo plan limits and ruleset checks differ from classic branch protection.
 - [Package installation quirks](workspace-package-installation.md) — pnpm callback targets the root; Go callback can reject go despite an available toolchain.
+- [Local Playwright browser on Nix](playwright-nix.md) — downloaded Chromium can miss shared libraries locally; use the wrapped browser for local checks, not in Ubuntu CI.
