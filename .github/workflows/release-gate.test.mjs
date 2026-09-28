@@ -8,6 +8,7 @@ import test from "node:test";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const workflowPath = path.join(repositoryRoot, ".github/workflows/release.yml");
+const independentLintPath = path.join(repositoryRoot, ".github/workflows/validate-workflows.yml");
 const eligibilityScript = path.join(repositoryRoot, ".github/scripts/verify-tagged-commit.sh");
 
 function git(directory, ...args) {
@@ -148,8 +149,9 @@ test("the release job requires API, web, and other checks before publishing a ta
   );
 });
 
-test("GitHub Actions workflows are linted in CI and block release on failure", async () => {
+test("an independent workflow lints pull requests and still blocks tag releases on failure", async () => {
   const workflow = await readFile(workflowPath, "utf8");
+  const independentLint = await readFile(independentLintPath, "utf8");
   const lintJobStart = workflow.indexOf("\n  workflow-lint:\n");
   const releaseJobStart = workflow.indexOf("\n  release:\n");
   assert.ok(lintJobStart >= 0 && releaseJobStart > lintJobStart);
@@ -158,19 +160,31 @@ test("GitHub Actions workflows are linted in CI and block release on failure", a
   assert.match(lintJob, /name: Lint GitHub Actions workflows/);
   assert.match(
     lintJob,
+    /^    if: github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)$/m,
+    "the release workflow calls the shared lint job only for tags",
+  );
+  assert.match(lintJob, /^    uses: \.\/\.github\/workflows\/validate-workflows\.yml$/m);
+  assert.match(
+    independentLint,
+    /^on:\n  pull_request:\n  push:\n    branches: \[main\]\n  workflow_call:$/m,
+    "the independent workflow runs on pull requests even when release.yml is invalid",
+  );
+  assert.doesNotMatch(workflow, /go install github\.com\/rhysd\/actionlint/);
+  assert.match(
+    independentLint,
     /go install github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12/,
   );
-  assert.match(lintJob, /"\$\(go env GOPATH\)\/bin\/actionlint"/);
+  assert.match(independentLint, /"\$\(go env GOPATH\)\/bin\/actionlint"/);
   assert.match(
-    lintJob,
+    independentLint,
     /ACTIONLINT_BIN="\$\(go env GOPATH\)\/bin\/actionlint" node --test \.github\/workflows\/actionlint-negative\.test\.mjs/,
   );
   assert.match(
-    lintJob,
+    independentLint,
     /- name: Install ShellCheck\n        run: sudo apt-get update && sudo apt-get install -y shellcheck/,
   );
   assert.match(
-    lintJob,
+    independentLint,
     /- name: Lint release shell scripts\n        run: shellcheck \.github\/scripts\/\*\.sh/,
   );
 });

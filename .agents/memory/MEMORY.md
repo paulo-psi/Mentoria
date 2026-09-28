@@ -2,6 +2,7 @@
 - [Drizzle CLI limitations](drizzle-cli.md) — schema generation rejects combined config/output flags; invoke the installed CLI rather than resolving its private entrypoint.
 - [PostgreSQL URL database precedence](pg-url-database-precedence.md) — the installed pg client and conservative fake disagree about conflicting URL database options.
 - [Release gate scope](release-gate-scope.md) — GitHub tag releases can require CI, but Replit Publish is a separate user action and is not blocked by GitHub checks.
+- [Independent workflow validation](independent-workflow-validation.md) — self-lint cannot catch an invalid workflow before GitHub rejects it; keep PR validation independent of release jobs.
 - [GitHub repository rulesets](github-repository-rulesets.md) — private-repo plan limits and ruleset checks differ from classic branch protection.
 - [Package installation quirks](workspace-package-installation.md) — pnpm callback targets the root; Go callback can reject go despite an available toolchain.
 - [Local Playwright browser on Nix](playwright-nix.md) — downloaded Chromium can miss shared libraries locally; use the wrapped browser for local checks, not in Ubuntu CI.

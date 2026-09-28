@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -20,8 +20,11 @@ async function lintFixture(t, source) {
   return `${result.stdout}\n${result.stderr}`;
 }
 
-test("actionlint rejects invalid workflow YAML", async (t) => {
-  const diagnostic = await lintFixture(t, "name: Broken YAML\non: push\njobs:\n  broken: [unterminated\n");
+test("actionlint rejects malformed release.yml before its own jobs can start", async (t) => {
+  const releaseWorkflow = await readFile(new URL("./release.yml", import.meta.url), "utf8");
+  const brokenWorkflow = releaseWorkflow.replace(/^jobs:$/m, "jobs:\n  broken: [unterminated");
+  assert.notEqual(brokenWorkflow, releaseWorkflow, "the actual release workflow was altered");
+  const diagnostic = await lintFixture(t, brokenWorkflow);
   assert.match(diagnostic, /could not parse as YAML|yaml: line \d+:/i);
 });
 
