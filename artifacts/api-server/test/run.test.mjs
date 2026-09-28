@@ -87,7 +87,8 @@ function createHarness(mode) {
             mode === "terminate-connections" ||
             mode === "multiple-cleanup-failures" ||
             mode === "multiple-cleanup-and-admin-end-failures" ||
-            mode === "nonzero-roster-and-multiple-cleanup-failures"
+            mode === "nonzero-roster-and-multiple-cleanup-failures" ||
+            mode === "temp-config-write-and-multiple-cleanup-failures"
           ) {
             throw new Error("simulated connection termination failure");
           }
@@ -103,7 +104,8 @@ function createHarness(mode) {
             mode === "multiple-cleanup-and-admin-end-failures" ||
             mode === "roster-and-drop-failure" ||
             mode === "nonzero-roster-and-multiple-cleanup-failures" ||
-            mode === "nonzero-roster-and-drop-failure"
+            mode === "nonzero-roster-and-drop-failure" ||
+            mode === "temp-config-write-and-multiple-cleanup-failures"
           ) {
             throw new Error("simulated database drop failure");
           }
@@ -142,7 +144,8 @@ function createHarness(mode) {
         mode === "signal-test-process-and-admin-end-failure" ||
         mode === "generate-schema-and-admin-end-failure" ||
         mode === "nonzero-roster-and-admin-end-failure" ||
-        mode === "temp-directory-create-and-admin-end-failure"
+        mode === "temp-directory-create-and-admin-end-failure" ||
+        mode === "temp-config-write-and-multiple-cleanup-failures"
       )) {
         throw new Error("simulated administrative connection close failure");
       }
@@ -187,7 +190,8 @@ function createHarness(mode) {
         mode === "roster-and-temp-failure" ||
         mode === "admin-connect-and-temp-failure" ||
         mode === "successful-roster-and-temp-failure" ||
-        mode === "signal-schema-generation-and-temp-failure"
+        mode === "signal-schema-generation-and-temp-failure" ||
+        mode === "temp-config-write-and-multiple-cleanup-failures"
       ) {
         throw new Error("simulated temporary-directory removal failure");
       }
@@ -195,7 +199,10 @@ function createHarness(mode) {
     },
     writeFile: async (...args) => {
       state.tempConfigWriteAttempts += 1;
-      if (mode === "temp-config-write-failure") {
+      if (
+        mode === "temp-config-write-failure" ||
+        mode === "temp-config-write-and-multiple-cleanup-failures"
+      ) {
         throw state.tempConfigWriteError;
       }
       return writeFile(...args);
@@ -376,6 +383,44 @@ test("temporary config write failure removes the disposable database and all tem
   assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
   assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
   await assertResourcesRemoved(harness.state);
+});
+
+test("temporary config write error remains primary when every cleanup step also fails", async () => {
+  const harness = createHarness("temp-config-write-and-multiple-cleanup-failures");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 5);
+      assert.equal(error.errors[0], harness.state.tempConfigWriteError);
+      assert.match(error.errors[1].message, /simulated connection termination failure/);
+      assert.match(error.errors[2].message, /simulated database drop failure/);
+      assert.match(error.errors[3].message, /simulated administrative connection close failure/);
+      assert.match(error.errors[4].message, /simulated temporary-directory removal failure/);
+      assert.equal(error.cause, harness.state.tempConfigWriteError);
+      return true;
+    });
+
+    assert.equal(harness.state.tempConfigWriteAttempts, 1, "writing the temporary config was attempted");
+    assert.equal(harness.state.createdDatabases.length, 1, "the disposable database was created first");
+    assert.equal(harness.state.terminateConnectionAttempts, 1, "database connection termination was attempted");
+    assert.equal(harness.state.dropDatabaseAttempts, 1, "the database drop was attempted after termination failed");
+    assert.deepEqual(harness.state.droppedDatabases, [], "the deliberately failed drop was not recorded");
+    assert.equal(harness.state.adminEnded, true, "administrative close was attempted");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+    assert.equal(harness.state.tempDirectories.length, 1);
+    await access(harness.state.tempDirectories[0]);
+    assert.equal(harness.state.fixtureConnectAttempts, 0, "fixture setup did not start");
+    assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+    assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+    assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
+    assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+    assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("schema generation failure removes the generated database and temporary files", async () => {
