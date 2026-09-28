@@ -71,6 +71,7 @@ export function TeamDossierDrawer({
         aria-labelledby="team-dossier-title"
         className="w-full max-w-none gap-0 overflow-hidden border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl [&>button]:hidden sm:max-w-2xl lg:max-w-3xl"
         data-testid="drawer-dossie-equipe"
+        overlayTestId="dossie-backdrop"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           onRestoreFocus();

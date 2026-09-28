@@ -1,22 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Team } from '@workspace/api-client-react';
+import type { Team, TeamSessionHistoryItem } from '@workspace/api-client-react';
 import { Home } from './App';
 
-const { getDashboardStats, getTeams } = vi.hoisted(() => ({
+const { getDashboardStats, getTeamSessions, getTeams } = vi.hoisted(() => ({
   getDashboardStats: vi.fn(),
+  getTeamSessions: vi.fn(),
   getTeams: vi.fn(),
 }));
 
 vi.mock('@workspace/api-client-react', () => ({
   getGetAccessPermissionsQueryKey: () => ['access'],
   getGetDashboardStatsQueryKey: () => ['dashboard-stats'],
+  getGetTeamSessionsQueryKey: (teamId: number) => [`/api/teams/${teamId}/sessions`],
   getGetHealthQueryKey: () => ['health'],
   getGetTeamsQueryKey: () => ['teams'],
   getHealthCheckQueryKey: () => ['health-check'],
   useGetAccessPermissions: () => ({ data: { canManage: false }, isError: false, refetch: vi.fn() }),
   useGetDashboardStats: getDashboardStats,
+  useGetTeamSessions: getTeamSessions,
   useHealthCheck: () => ({ data: { status: 'ok' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetHealth: () => ({ data: { status: 'ok', database: 'connected' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetTeams: getTeams,
@@ -71,6 +74,38 @@ const roster: Team[] = [
   },
 ];
 
+const longMentorAssessment =
+  'Parecer integral sobre a maturidade e as entregas da equipe, com evidências e recomendações detalhadas. '.repeat(
+    80,
+  );
+
+const dossierSessions: TeamSessionHistoryItem[] = [
+  {
+    id: 301,
+    sessionDate: '2026-03-24',
+    sessionType: 'principal',
+    mentor: {
+      id: 41,
+      name: 'Carolina Nunes',
+      expertiseArea: 'Estratégia e Produto',
+      mentorType: 'interno',
+    },
+    scores: {
+      teamNps: 9,
+      teamActionability: 8,
+      mentorCommitment: 10,
+      mentorTraction: 7,
+    },
+    qualitative: {
+      mentorQualitativeAssessment: longMentorAssessment,
+      teamFeedbackStrongPoints: 'Comunicação clara e validação consistente.',
+      teamFeedbackImprovements: 'Ampliar a amostra de entrevistas.',
+      agreedNextSteps: 'Concluir cinco entrevistas com usuários até sexta-feira.',
+    },
+    createdAt: '2026-03-24T15:00:00.000Z',
+  },
+];
+
 const punctuationVariantRoster = [
   {
     ...roster[0],
@@ -87,6 +122,13 @@ const punctuationVariantRoster = [
 ];
 
 beforeEach(() => {
+  getTeamSessions.mockReturnValue({
+    data: [],
+    isError: false,
+    isFetching: false,
+    isLoading: false,
+    refetch: vi.fn(),
+  });
   getDashboardStats.mockReturnValue({
     data: {
       totalSessions: 18,
@@ -307,7 +349,14 @@ describe('busca de equipes', () => {
 });
 
 describe('tabela executiva de equipes', () => {
-  it('exibe dados agregados e mantém o botão de dossiê como placeholder', async () => {
+  it('exibe os dados agregados e abre o dossiê com todos os dados da API', async () => {
+    getTeamSessions.mockReturnValue({
+      data: dossierSessions,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
     const user = userEvent.setup();
     render(<Home />);
 
@@ -325,14 +374,110 @@ describe('tabela executiva de equipes', () => {
     expect(row.textContent).toContain('29/03/2026');
     expect(within(row).getByTestId('text-proximo-passo-1').textContent).toBe('Concluir testes com usuários.');
 
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
-    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' }));
-    expect(info).toHaveBeenCalledWith('Dossiê completo disponível no Marco 3.', {
-      teamId: 1,
-      teamName: 'Equipe Educação',
+    const trigger = screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' });
+    await user.click(trigger);
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(getTeamSessions).toHaveBeenCalledWith(1, {
+      query: { enabled: true, queryKey: ['/api/teams/1/sessions'] },
     });
-    expect(screen.queryByRole('dialog')).toBeNull();
-    info.mockRestore();
+    expect(screen.getByTestId('text-dossie-equipe').textContent).toBe('Equipe Educação');
+    expect(screen.getByTestId('badge-estagio-equipe').textContent).toBe('Validação');
+    expect(screen.getByTestId('badge-mentor-principal').textContent).toContain('João Araújo');
+    expect(screen.getByTestId('text-data-sessao-301').textContent).toBe('24 de março de 2026');
+    expect(screen.getByTestId('badge-tipo-sessao-301').textContent).toBe('Principal');
+    expect(screen.getByTestId('text-mentor-sessao-301').textContent).toContain('Carolina Nunes');
+    expect(screen.getByTestId('nota-301-teamNps').textContent).toContain('9');
+    expect(screen.getByTestId('nota-301-teamActionability').textContent).toContain('8');
+    expect(screen.getByTestId('nota-301-mentorCommitment').textContent).toContain('10');
+    expect(screen.getByTestId('nota-301-mentorTraction').textContent).toContain('7');
+    expect(screen.getByTestId('parecer-mentor-301').textContent).toContain(longMentorAssessment);
+    expect(screen.getByTestId('pontos-fortes-301').textContent).toBe(
+      'Pontos fortes da equipeComunicação clara e validação consistente.',
+    );
+    expect(screen.getByTestId('oportunidades-melhoria-301').textContent).toBe(
+      'Oportunidades de melhoriaAmpliar a amostra de entrevistas.',
+    );
+    expect(screen.getByTestId('proximos-passos-301').textContent).toContain(
+      'Concluir cinco entrevistas com usuários até sexta-feira.',
+    );
+
+    await user.click(screen.getByTestId('button-fechar-dossie'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('fecha o dossiê com Escape e restaura o foco para o botão que o abriu', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const trigger = screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' });
+
+    await user.click(trigger);
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('fecha o dossiê ao clicar no backdrop e restaura o foco para o botão que o abriu', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const trigger = screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' });
+
+    await user.click(trigger);
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await user.click(screen.getByTestId('dossie-backdrop'));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('mostra o skeleton enquanto o histórico carrega', async () => {
+    getTeamSessions.mockReturnValue({
+      data: undefined,
+      isError: false,
+      isFetching: true,
+      isLoading: true,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' }));
+
+    expect(await screen.findByTestId('loading-sessoes')).toBeTruthy();
+    expect(screen.getByTestId('skeleton-sessao-1')).toBeTruthy();
+  });
+
+  it('mostra o estado vazio quando a equipe ainda não tem mentorias', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Saúde' }));
+
+    expect((await screen.findByTestId('state-vazio-sessoes')).textContent).toBe(
+      'Nenhuma mentoria registrada para esta equipe até o momento.',
+    );
+  });
+
+  it('permite tentar novamente quando o histórico falha', async () => {
+    const retry = vi.fn();
+    getTeamSessions.mockReturnValue({
+      data: undefined,
+      isError: true,
+      isFetching: false,
+      isLoading: false,
+      refetch: retry,
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' }));
+    expect(await screen.findByTestId('state-erro-sessoes')).toBeTruthy();
+    await user.click(screen.getByTestId('button-tentar-novamente-sessoes'));
+
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it('mostra linhas skeleton enquanto as equipes carregam', () => {

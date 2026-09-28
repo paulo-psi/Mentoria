@@ -1,5 +1,7 @@
+import { useRef, useState } from 'react';
 import type { Team } from '@workspace/api-client-react';
 import { Calendar, ChevronRight, FileText, Share2 } from 'lucide-react';
+import { TeamDossierDrawer } from '@/components/team-dossier-drawer';
 
 type TeamsExecutiveTableProps = {
   teams: Team[];
@@ -37,7 +39,12 @@ export function TeamsTableSkeleton() {
 }
 
 export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [dossierOpen, setDossierOpen] = useState(false);
+  const dossierTriggerRef = useRef<HTMLButtonElement | null>(null);
+
   return (
+    <>
     <div
       className="max-w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
       data-testid="table-executive-teams"
@@ -154,11 +161,10 @@ export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
                     aria-label={`Ver dossiê de ${team.name}`}
                     className="inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2.5 py-1.5 text-[11px] text-zinc-600 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
                     data-testid={`button-ver-dossie-${team.id}`}
-                    onClick={() => {
-                      console.info('Dossiê completo disponível no Marco 3.', {
-                        teamId: team.id,
-                        teamName: team.name,
-                      });
+                    onClick={(event) => {
+                      dossierTriggerRef.current = event.currentTarget;
+                      setSelectedTeam(team);
+                      setDossierOpen(true);
                     }}
                     type="button"
                   >
@@ -173,6 +179,16 @@ export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
         </table>
       </div>
     </div>
+    {selectedTeam && (
+      <TeamDossierDrawer
+        team={selectedTeam}
+        open={dossierOpen}
+        onOpenChange={setDossierOpen}
+        onRestoreFocus={() => dossierTriggerRef.current?.focus()}
+        onClosed={() => setSelectedTeam(null)}
+      />
+    )}
+    </>
   );
 }
 
