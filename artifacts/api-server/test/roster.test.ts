@@ -206,6 +206,31 @@ async function rosterSnapshot() {
   };
 }
 
+async function assertLegacyDataPreservedAfterChange(
+  change: (legacy: Awaited<ReturnType<typeof insertLegacyDemo>>) => Promise<unknown>,
+) {
+  await clearRosterTables();
+  try {
+    const legacy = await insertLegacyDemo();
+    assert.equal(legacy.mentors.length, legacyDemoMentors.length);
+    assert.equal(legacy.teams.length, legacyDemoTeams.length);
+    assert.equal(legacy.students.length, 0);
+    assert.equal(legacy.sessions.length, legacyDemoTeams.length * 3);
+
+    await change(legacy);
+    const beforeSeed = await rosterSnapshot();
+    await seedDatabase();
+
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "a changed legacy field must preserve mentors, teams, students and sessions",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+}
+
 test("only the complete legacy demo migrates; any changed legacy data is preserved", async () => {
   await clearRosterTables();
   try {
@@ -254,6 +279,24 @@ test("only the complete legacy demo migrates; any changed legacy data is preserv
   } finally {
     await clearRosterTables();
   }
+});
+
+test("a changed legacy team or session field preserves every roster table", async (t) => {
+  await t.test("team pitch summary differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ teams }) => {
+      await db.update(teamsTable)
+        .set({ pitchSummary: "Resumo atualizado pela equipe" })
+        .where(eq(teamsTable.id, teams[0].id));
+    });
+  });
+
+  await t.test("session evaluation differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ sessions }) => {
+      await db.update(mentoringSessionsTable)
+        .set({ teamNps: 0 })
+        .where(eq(mentoringSessionsTable.id, sessions[0].id));
+    });
+  });
 });
 
 test("official document, seed and API agree on every mentor, team, student and order", async () => {
