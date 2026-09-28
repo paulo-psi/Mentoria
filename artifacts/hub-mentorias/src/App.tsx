@@ -89,9 +89,9 @@ export function Home() {
     const normalizedSearch = normalizeSearchText(search.trim());
     if (!normalizedSearch) return source;
     return source.filter((team) =>
-      normalizeSearchText(
-        [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].join(' '),
-      ).includes(normalizedSearch),
+      [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].some(
+        (name) => normalizeSearchText(name).includes(normalizedSearch),
+      ),
     );
   }, [search, teams.data]);
 

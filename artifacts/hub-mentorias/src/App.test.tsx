@@ -78,6 +78,18 @@ describe('busca de equipes', () => {
     expect(within(card).getByText(roster[id - 1].students[0].name)).toBeTruthy();
   });
 
+  it('não encontra equipe com uma busca que atravessa campos de nome diferentes', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar equipe, mentor ou estudante' });
+
+    await user.type(input, 'educacao joao');
+
+    expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
+    expect(screen.queryByTestId('card-equipe-1')).toBeNull();
+    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+  });
+
   it('mostra o estado sem resultados e limpa a busca, restaurando os nomes originais', async () => {
     const user = userEvent.setup();
     render(<Home />);
