@@ -365,6 +365,49 @@ test("only the complete legacy demo migrates; any changed legacy data is preserv
   }
 });
 
+test("a different legacy session date still allows the official roster to replace the demo", async () => {
+  await clearRosterTables();
+  try {
+    const legacy = await insertLegacyDemo();
+    assert.equal(legacy.mentors.length, legacyDemoMentors.length);
+    assert.equal(legacy.teams.length, legacyDemoTeams.length);
+    assert.equal(legacy.students.length, 0);
+    assert.equal(legacy.sessions.length, legacyDemoTeams.length * 3);
+
+    const changedDate = "2024-12-31";
+    assert.notEqual(legacy.sessions[0].sessionDate, changedDate);
+    const changed = await db.update(mentoringSessionsTable)
+      .set({ sessionDate: changedDate })
+      .where(eq(mentoringSessionsTable.id, legacy.sessions[0].id))
+      .returning();
+    assert.equal(changed.length, 1);
+    assert.equal(changed[0].sessionDate, changedDate);
+
+    await seedDatabase();
+
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((count, team) => count + team.students.length, 0));
+    assert.deepEqual(official.sessions, [], "all legacy demo sessions must be removed");
+    const mentorNameById = new Map(official.mentors.map(({ id, name }) => [id, name]));
+    assert.deepEqual(
+      official.teams.map((team) => ({
+        name: team.name,
+        mentor: mentorNameById.get(team.mainMentorId),
+        students: official.students.filter(({ teamId }) => teamId === team.id)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(({ name }) => name),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
+      officialTeams.map(({ name, mentor, students }) => ({ name, mentor, students }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      "the changed date must not block the complete official roster import",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
 test("extra mentors or teams in a legacy roster survive startup seeding", async (t) => {
   await t.test("an additional mentor", async () => {
     await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
