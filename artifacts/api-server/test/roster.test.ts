@@ -13,7 +13,9 @@ import teamRoutes from "../src/routes/team-maintenance";
 import studentRoutes from "../src/routes/students";
 import listRoutes from "../src/routes/teams";
 import { officialTeams } from "../src/official-data";
-import { seedDatabase } from "../src/seed";
+import {
+  legacyDemoMentors, legacyDemoTeams, legacySessionPayloads, seedDatabase,
+} from "../src/seed";
 import { logger } from "../src/lib/logger";
 
 const ADMIN = "admin@test.invalid";
@@ -157,6 +159,101 @@ function rosterProjection(rows: Team[]) {
     sessoes: team.sessionCount,
   }));
 }
+
+async function clearRosterTables() {
+  await db.delete(mentoringSessionsTable);
+  await db.delete(studentsTable);
+  await db.delete(teamsTable);
+  await db.delete(mentorsTable);
+}
+
+async function insertLegacyDemo({ withRealStudent = false } = {}) {
+  const mentors = await db.insert(mentorsTable).values([...legacyDemoMentors]).returning();
+  const mentorIdByName = new Map(mentors.map(({ id, name }) => [name, id]));
+  const teams = await db.insert(teamsTable).values(
+    legacyDemoTeams.map((team, index) => ({
+      name: team.name,
+      pitchSummary: team.pitchSummary,
+      currentStage: team.currentStage,
+      mainMentorId: mentorIdByName.get(legacyDemoMentors[index].name)!,
+    })),
+  ).returning();
+  const teamIdByName = new Map(teams.map(({ id, name }) => [name, id]));
+  const sessions = await db.insert(mentoringSessionsTable).values(
+    legacySessionPayloads(mentorIdByName, teamIdByName).map((session, index) => ({
+      ...session,
+      sessionDate: `2025-01-${String(index + 1).padStart(2, "0")}`,
+    })),
+  ).returning();
+  const students = withRealStudent
+    ? await db.insert(studentsTable).values({
+      teamId: teamIdByName.get(legacyDemoTeams[0].name)!,
+      name: "Estudante cadastrado pela equipe",
+      sortOrder: 0,
+    }).returning()
+    : [];
+  return { mentors, teams, students, sessions };
+}
+
+async function rosterSnapshot() {
+  const byId = <T extends { id: number }>(rows: T[]) => rows.sort((a, b) => a.id - b.id);
+  return {
+    mentors: byId(await db.select().from(mentorsTable)),
+    teams: byId(await db.select().from(teamsTable)),
+    students: byId(await db.select().from(studentsTable)),
+    sessions: byId(await db.select().from(mentoringSessionsTable)),
+  };
+}
+
+test("only the complete legacy demo migrates; any changed legacy data is preserved", async () => {
+  await clearRosterTables();
+  try {
+    const legacy = await insertLegacyDemo();
+    assert.equal(legacy.mentors.length, legacyDemoMentors.length);
+    assert.equal(legacy.teams.length, legacyDemoTeams.length);
+    assert.equal(legacy.students.length, 0);
+    assert.equal(legacy.sessions.length, legacyDemoTeams.length * 3);
+
+    await seedDatabase();
+
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((count, team) => count + team.students.length, 0));
+    assert.deepEqual(official.sessions, [], "legacy sessions are removed only when the complete fixture matches");
+    const mentorNameById = new Map(official.mentors.map(({ id, name }) => [id, name]));
+    const teamNameById = new Map(official.teams.map(({ id, name }) => [id, name]));
+    assert.deepEqual(
+      official.teams.map(({ id, mainMentorId }) => ({
+        team: teamNameById.get(id),
+        mentor: mentorNameById.get(mainMentorId),
+      })).sort((a, b) => a.team!.localeCompare(b.team!)),
+      officialTeams.map(({ name, mentor }) => ({ team: name, mentor }))
+        .sort((a, b) => a.team.localeCompare(b.team)),
+      "the replacement must use the official mentor/team relationships",
+    );
+
+    await clearRosterTables();
+    await insertLegacyDemo({ withRealStudent: true });
+    const changedMentor = await db.select().from(mentorsTable)
+      .where(eq(mentorsTable.name, legacyDemoMentors[0].name));
+    assert.equal(changedMentor.length, 1);
+    await db.update(mentorsTable)
+      .set({ expertiseArea: "Área atualizada pela equipe" })
+      .where(eq(mentorsTable.id, changedMentor[0].id));
+
+    const beforeUnrecognizedSeed = await rosterSnapshot();
+    assert.equal(beforeUnrecognizedSeed.students.length, 1);
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeUnrecognizedSeed,
+      "one changed legacy field and a real student must prevent deletion of every roster record",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
 
 test("official document, seed and API agree on every mentor, team, student and order", async () => {
   const expected = await officialRoster();
