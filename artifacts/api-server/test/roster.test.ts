@@ -12,6 +12,7 @@ import {
 import teamRoutes from "../src/routes/team-maintenance";
 import studentRoutes from "../src/routes/students";
 import listRoutes from "../src/routes/teams";
+import { rosterWriteLock } from "../src/lib/roster-lock";
 import { officialTeams } from "../src/official-data";
 import {
   legacyDemoMentors, legacyDemoTeams, legacySessionPayloads, seedDatabase,
@@ -36,10 +37,10 @@ mock.method(clerkClient.users, "getUser", async (userId: string) => ({
 let server: Server | undefined;
 let baseUrl = "";
 
-async function start() {
+async function start({ seed = true }: { seed?: boolean } = {}) {
   // Matches the startup order in src/index.ts, with a local identity shim in
   // place of Clerk's token verification. No production HTTP server is used.
-  await seedDatabase();
+  if (seed) await seedDatabase();
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -300,6 +301,94 @@ test("official document, seed and API agree on every mentor, team, student and o
     assert.deepEqual(await db.select().from(mentoringSessionsTable), [], "second seed must not add sessions");
   } finally {
     await stop();
+  }
+});
+
+test("a student edit concurrent with startup seed is serialized and preserved", async () => {
+  await clearRosterTables();
+  await seedDatabase();
+  await start({ seed: false });
+
+  let releaseBlocker!: () => void;
+  let signalLockAcquired!: () => void;
+  const blockerRelease = new Promise<void>((resolve) => { releaseBlocker = resolve; });
+  const lockAcquired = new Promise<void>((resolve) => { signalLockAcquired = resolve; });
+  const blocker = db.transaction(async (tx) => {
+    await tx.execute(rosterWriteLock);
+    signalLockAcquired();
+    await blockerRelease;
+  });
+
+  let seedRun: Promise<void> | undefined;
+  let editRun: Promise<{ status: number; body: unknown }> | undefined;
+  try {
+    await lockAcquired;
+    const before = await rosterSnapshot();
+    const team = (await teams())[0];
+    assert.ok(team, "the initial official seed must include a team");
+    const student = team.students[0];
+    assert.ok(student, "the chosen team must include a student");
+    const updatedName = `${student.name} (editada durante a inicialização)`;
+
+    let seedSettled = false;
+    let editSettled = false;
+    seedRun = seedDatabase().finally(() => { seedSettled = true; });
+    editRun = request(
+      "PATCH",
+      `/teams/${team.id}/students/${student.id}`,
+      { expectedName: student.name, name: updatedName },
+      "admin",
+    ).finally(() => { editSettled = true; });
+
+    const deadline = Date.now() + 5_000;
+    let waitingOperations = 0;
+    while (Date.now() < deadline) {
+      const { rows: [{ count }] } = await pool.query<{ count: number }>(`
+        SELECT count(*)::int AS count
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND NOT granted
+          AND classid = 0
+          AND objid = 732941
+          AND objsubid = 1
+      `);
+      waitingOperations = count;
+      if (waitingOperations === 2) break;
+      assert.equal(seedSettled, false, "startup seed must wait for the shared roster lock");
+      assert.equal(editSettled, false, "administrative edit must wait for the shared roster lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(waitingOperations, 2, "both concurrent operations must wait on the roster lock");
+
+    releaseBlocker();
+    const [_, response] = await Promise.all([seedRun, editRun]);
+    assert.equal(response.status, 200);
+    assert.equal((response.body as { name: string }).name, updatedName);
+
+    const expected = {
+      ...before,
+      students: before.students.map((row) =>
+        row.id === student.id ? { ...row, name: updatedName } : row
+      ),
+    };
+    assert.deepEqual(await rosterSnapshot(), expected, "the only roster change must be the administrator's edit");
+    assert.equal(expected.mentors.length, officialTeams.length, "seed must not duplicate mentors");
+    assert.equal(expected.teams.length, officialTeams.length, "seed must not duplicate teams");
+    assert.equal(
+      expected.students.length,
+      officialTeams.reduce((total, entry) => total + entry.students.length, 0),
+      "seed must not duplicate or remove students",
+    );
+    assert.deepEqual(expected.sessions, [], "startup seed must not create mentoring sessions");
+  } finally {
+    releaseBlocker();
+    await blocker;
+    const pendingOperations: Promise<unknown>[] = [];
+    if (seedRun) pendingOperations.push(seedRun);
+    if (editRun) pendingOperations.push(editRun);
+    await Promise.allSettled(pendingOperations);
+    await stop();
+    await clearRosterTables();
   }
 });
 
