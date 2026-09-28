@@ -47,6 +47,8 @@ jobs:
         run: pnpm --filter @workspace/api-server run typecheck
       - name: Build API
         run: pnpm --filter @workspace/api-server run build
+      - name: Smoke-test built API with disposable PostgreSQL
+        run: bash .github/scripts/smoke-built-api.sh
 
   web-validation:
     name: Web validation

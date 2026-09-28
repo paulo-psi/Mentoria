@@ -5,3 +5,4 @@
 - [GitHub repository rulesets](github-repository-rulesets.md) — private-repo plan limits and ruleset checks differ from classic branch protection.
 - [Package installation quirks](workspace-package-installation.md) — pnpm callback targets the root; Go callback can reject go despite an available toolchain.
 - [Local Playwright browser on Nix](playwright-nix.md) — downloaded Chromium can miss shared libraries locally; use the wrapped browser for local checks, not in Ubuntu CI.
+- [Smoke-check port ownership](smoke-port-ownership.md) — local proxy ports can return an app response even when a new server fails to bind; verify port ownership before trusting health.
