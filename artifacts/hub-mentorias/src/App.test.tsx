@@ -37,6 +37,21 @@ const roster = [
   },
 ];
 
+const punctuationVariantRoster = [
+  {
+    ...roster[0],
+    name: 'Equipe D’Ávila',
+    mainMentor: { ...roster[0].mainMentor, name: 'João-Maria' },
+    students: [{ ...roster[0].students[0], name: 'Ana‑Clara' }],
+  },
+  {
+    ...roster[1],
+    name: 'Equipe D Avila',
+    mainMentor: { ...roster[1].mainMentor, name: 'João Maria' },
+    students: [{ ...roster[1].students[0], name: 'Ana Clara' }],
+  },
+];
+
 beforeEach(() => {
   getTeams.mockReturnValue({
     data: roster,
@@ -79,6 +94,33 @@ describe('busca de equipes', () => {
     expect(within(card).getByText(roster[id - 1].name)).toBeTruthy();
     expect(within(card).getByText(roster[id - 1].mainMentor.name)).toBeTruthy();
     expect(within(card).getByText(roster[id - 1].students[0].name)).toBeTruthy();
+  });
+
+  it.each([
+    ['equipe', "Equipe D'Ávila"],
+    ['mentor', 'João‐Maria'],
+    ['estudante', 'Ana—Clara'],
+  ])('encontra %s quando a pontuação colada varia sem alterar a grafia original', async (_kind, query) => {
+    getTeams.mockReturnValue({
+      data: punctuationVariantRoster,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar equipe, mentor ou estudante' });
+
+    await user.click(input);
+    await user.paste(query);
+
+    expect(input).toHaveProperty('value', query);
+    const card = screen.getByTestId('card-equipe-1');
+    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+    expect(within(card).getByText('Equipe D’Ávila')).toBeTruthy();
+    expect(within(card).getByText('João-Maria')).toBeTruthy();
+    expect(within(card).getByText('Ana‑Clara')).toBeTruthy();
   });
 
   it('encontra uma equipe quando a busca colada contém espaço não separável sem mudar o nome exibido', async () => {

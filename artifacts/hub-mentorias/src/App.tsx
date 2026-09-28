@@ -53,6 +53,8 @@ function normalizeSearchText(value: string): string {
   return value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(/[\u2018\u2019\u201b\u02bc\uff07]/gu, "'")
+    .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/gu, '-')
     .replace(/\s+/g, ' ')
     .toLocaleLowerCase('pt-BR');
 }
