@@ -86,7 +86,7 @@ test("rejects an unmerged tagged commit before the release command can run", asy
   await assert.rejects(readFile(releaseMarker), { code: "ENOENT" });
 });
 
-test("the release job runs and requires the eligibility test before publishing", async () => {
+test("the release job requires API, web, and other checks before publishing a tag", async () => {
   const workflow = await readFile(workflowPath, "utf8");
   const releaseJobStart = workflow.indexOf("\n  release:\n");
   assert.notEqual(releaseJobStart, -1, "the release job exists");
@@ -94,13 +94,26 @@ test("the release job runs and requires the eligibility test before publishing",
   const gateStep = releaseJob.indexOf("run: bash .github/scripts/verify-tagged-commit.sh");
   const publishStep = releaseJob.indexOf("run: gh release create");
   const gateStepStart = releaseJob.indexOf("- name: Verify tagged commit is merged to main");
-  const publishStepStart = releaseJob.indexOf("- name: Publish only after live isolation succeeds");
+  const publishStepStart = releaseJob.indexOf("- name: Publish only after all validation jobs succeed");
 
   assert.match(workflow, /release-gate-validation:[\s\S]*?node --test \.github\/workflows\/release-gate\.test\.mjs/);
   assert.match(
     releaseJob,
-    /needs: \[live-database-isolation, release-gate-validation, workflow-lint\]/,
+    /^    if: github\.event_name == 'push' && startsWith\(github\.ref, 'refs\/tags\/v'\)$/m,
+    "only a push of a release tag can publish",
   );
+  const needs = releaseJob.match(/^    needs: \[([^\]]+)\]$/m)?.[1].split(",").map((job) => job.trim());
+  assert.ok(needs, "the release job declares its prerequisites");
+  for (const job of [
+    "api-validation",
+    "web-validation",
+    "live-database-isolation",
+    "release-gate-validation",
+    "workflow-lint",
+  ]) {
+    assert.ok(workflow.includes(`\n  ${job}:\n`), `${job} exists`);
+    assert.ok(needs.includes(job), `${job} must succeed before gh release create`);
+  }
   assert.ok(
     gateStepStart >= 0 && publishStepStart > gateStepStart &&
       gateStep >= gateStepStart && publishStep > publishStepStart,

@@ -163,7 +163,7 @@ jobs:
   release:
     name: Publish GitHub release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [live-database-isolation, release-gate-validation, workflow-lint]
+    needs: [api-validation, web-validation, live-database-isolation, release-gate-validation, workflow-lint]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -173,7 +173,7 @@ jobs:
           fetch-depth: 0
       - name: Verify tagged commit is merged to main
         run: bash .github/scripts/verify-tagged-commit.sh
-      - name: Publish only after live isolation succeeds
+      - name: Publish only after all validation jobs succeed
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
