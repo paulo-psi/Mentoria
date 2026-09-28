@@ -422,6 +422,40 @@ test("schema generation exit failure remains visible when the admin connection c
   await assertResourcesRemoved(harness.state);
 });
 
+test("schema generation exit failure remains visible when temporary-directory cleanup also fails", async () => {
+  const harness = createHarness({
+    schemaResult: { status: 3 },
+    fail: ["tempDirectoryRemove"],
+  });
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 2);
+      assert.equal(error.cause, error.errors[0]);
+      assert.match(error.cause.message, /Failed to generate the application schema.*exit code 3/);
+      assert.equal(error.cause.exitCode, 3);
+      assert.match(error.errors[1].message, /simulated temporary-directory removal failure/);
+      return true;
+    });
+
+    assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 3 }]);
+    assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+    assert.equal(harness.state.runTestProcess, false, "roster tests did not start");
+    assert.equal(harness.state.terminateConnectionAttempts, 1, "database connections were terminated");
+    assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+    assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases);
+    assert.equal(harness.state.adminEnded, true, "administrative close was attempted");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+    assert.equal(harness.state.tempDirectories.length, 1);
+    await access(harness.state.tempDirectories[0]);
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+});
+
 test("empty generated migration listing stops before fixtures and removes resources", async () => {
   await assertInvalidMigrationListingStopsBeforeFixtures(createHarness({ migrations: [] }));
 });
