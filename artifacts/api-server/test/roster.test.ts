@@ -453,6 +453,24 @@ test("a changed legacy mentor or team signature field preserves every roster tab
   });
 });
 
+test("renaming one legacy mentor or team preserves every roster table on startup", async (t) => {
+  await t.test("mentor name changes alone", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
+      await db.update(mentorsTable)
+        .set({ name: "Ana Beatriz Costa (renomeada)" })
+        .where(eq(mentorsTable.id, mentors[0].id));
+    });
+  });
+
+  await t.test("team name changes alone", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ teams }) => {
+      await db.update(teamsTable)
+        .set({ name: "Verdeira (renomeada)" })
+        .where(eq(teamsTable.id, teams[0].id));
+    });
+  });
+});
+
 test("a failed official roster insert rolls back the complete legacy replacement", async () => {
   await clearRosterTables();
   let triggerCreated = false;
