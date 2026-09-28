@@ -56,10 +56,13 @@ describe('busca de equipes', () => {
   it.each([
     ['equipe', 'Educacao', 1],
     ['equipe', 'EDUCAÇÃO', 1],
+    ['equipe', 'Equipe   Educação', 1],
     ['mentor', 'joao araujo', 1],
     ['mentor', 'JOÃO ARAÚJO', 1],
+    ['mentor', 'João    Araújo', 1],
     ['estudante', 'livia goncalves', 1],
     ['estudante', 'LÍVIA GONÇALVES', 1],
+    ['estudante', 'Lívia  Gonçalves', 1],
     ['equipe', 'saude', 2],
     ['mentor', 'marcia evora', 2],
     ['estudante', 'cesar nobrega', 2],
