@@ -122,7 +122,11 @@ function createHarness(mode) {
     async end() {
       if (this.isAdmin) state.adminEnded = true;
       else state.fixtureEnded = true;
-      if (this.isAdmin && (mode === "admin-end" || mode === "multiple-cleanup-and-admin-end-failures")) {
+      if (this.isAdmin && (
+        mode === "admin-end" ||
+        mode === "multiple-cleanup-and-admin-end-failures" ||
+        mode === "nonzero-roster-and-admin-end-failure"
+      )) {
         throw new Error("simulated administrative connection close failure");
       }
       if (!this.isAdmin && mode === "fixture-connect-and-end") {
@@ -175,7 +179,8 @@ function createHarness(mode) {
       status:
         mode === "run-tests" ||
         mode === "nonzero-roster-and-drop-failure" ||
-        mode === "nonzero-roster-and-multiple-cleanup-failures"
+        mode === "nonzero-roster-and-multiple-cleanup-failures" ||
+        mode === "nonzero-roster-and-admin-end-failure"
           ? 7
           : 0,
     };
@@ -487,6 +492,27 @@ test("nonzero roster test status remains visible when administrative cleanup fai
   assert.equal(harness.state.dropDatabaseAttempts, 1, "the generated database drop was attempted");
   assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-file cleanup was attempted");
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("nonzero roster test status remains visible when the administrative connection cannot close", async () => {
+  const harness = createHarness("nonzero-roster-and-admin-end-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.errors[0].exitCode, 7);
+    assert.match(error.errors[0].message, /exited with status 7/);
+    assert.match(error.errors[1].message, /simulated administrative connection close failure/);
+    assert.equal(error.cause, error.errors[0]);
+    return true;
+  });
+
+  assert.equal(harness.state.runTestProcess, true, "the fake roster test process was attempted");
+  assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases, "the disposable database was dropped");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection close was attempted");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  assert.equal(harness.state.clientCreations, 2, "only fake administrative and fixture clients were created");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
