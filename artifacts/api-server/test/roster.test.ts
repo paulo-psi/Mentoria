@@ -2395,11 +2395,22 @@ test("a deleted official session stays deleted after startup seeding", async () 
     )
 ;
 
+    await start({ seed: false })
+;
+    const listedTeam = (await teams()).find(({ id }) => id === retainedSession.teamId)
+;
+    assert.ok(listedTeam, "the affected official team must remain in the team list")
+;
+    assert.equal(listedTeam.sessionCount, 1, "the team list must report its one remaining session")
+;
+
   
 }
  finally 
 {
 
+    await stop()
+;
     await clearRosterTables()
 ;
 
