@@ -531,6 +531,44 @@ test("a failed official roster insert rolls back the complete legacy replacement
     assert.equal(afterFailure.teams.some(({ name }) =>
       officialTeams.some(({ name: officialName }) => officialName === name)
     ), false, "official teams inserted before the failure must be rolled back");
+
+    await pool.query("DROP TRIGGER roster_test_fail_official_student_insert ON students");
+    triggerCreated = false;
+    await pool.query("DROP FUNCTION roster_test_fail_official_student_insert()");
+    functionCreated = false;
+
+    await seedDatabase();
+    const afterRetry = await rosterSnapshot();
+    const expectedOfficial = await officialRoster();
+    const mentorNameById = new Map(afterRetry.mentors.map(({ id, name }) => [id, name]));
+    const teamNameById = new Map(afterRetry.teams.map(({ id, name }) => [id, name]));
+
+    assert.deepEqual(
+      afterRetry.mentors.map(({ name }) => name).sort(),
+      expectedOfficial.map(({ mentor }) => mentor).sort(),
+      "retry must install every official mentor",
+    );
+    assert.deepEqual(
+      afterRetry.teams.map(({ name, mainMentorId }) => ({
+        team: name,
+        mentor: mentorNameById.get(mainMentorId)!,
+      })).sort((a, b) => a.team.localeCompare(b.team)),
+      expectedOfficial.map(({ equipe, mentor }) => ({ team: equipe, mentor }))
+        .sort((a, b) => a.team.localeCompare(b.team)),
+      "retry must install every official team and mentor assignment",
+    );
+    assert.deepEqual(
+      afterRetry.students.map(({ teamId, name, sortOrder }) => ({
+        team: teamNameById.get(teamId)!,
+        name,
+        sortOrder,
+      })).sort((a, b) => a.team.localeCompare(b.team) || a.sortOrder - b.sortOrder),
+      expectedOfficial.flatMap(({ equipe, integrantes }) =>
+        integrantes.map((name, sortOrder) => ({ team: equipe, name, sortOrder }))
+      ).sort((a, b) => a.team.localeCompare(b.team) || a.sortOrder - b.sortOrder),
+      "retry must install every official student in the correct order",
+    );
+    assert.deepEqual(afterRetry.sessions, [], "retry must remove all legacy sessions");
   } finally {
     if (triggerCreated) {
       await pool.query("DROP TRIGGER roster_test_fail_official_student_insert ON students");
