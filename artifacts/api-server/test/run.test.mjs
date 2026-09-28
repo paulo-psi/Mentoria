@@ -136,6 +136,7 @@ function createHarness(mode) {
         mode === "multiple-cleanup-and-admin-end-failures" ||
         mode === "signal-schema-generation-and-admin-end-failure" ||
         mode === "signal-test-process-and-admin-end-failure" ||
+        mode === "generate-schema-and-admin-end-failure" ||
         mode === "nonzero-roster-and-admin-end-failure" ||
         mode === "temp-directory-create-and-admin-end-failure"
       )) {
@@ -205,7 +206,12 @@ function createHarness(mode) {
       ) {
         result = { status: null, signal: "SIGTERM" };
       } else {
-        result = { status: mode === "generate-schema" ? 3 : 0 };
+        result = {
+          status:
+            mode === "generate-schema" || mode === "generate-schema-and-admin-end-failure"
+              ? 3
+              : 0,
+        };
       }
       state.schemaGenerationResults.push(result);
       return result;
@@ -374,6 +380,28 @@ test("schema generation failure removes the generated database and temporary fil
   assert.equal(harness.state.fixtureQueries.length, 0);
   assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 3 }]);
   assert.equal(harness.state.runTestProcess, false);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("schema generation exit failure remains visible when the admin connection cannot close", async () => {
+  const harness = createHarness("generate-schema-and-admin-end-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.cause, error.errors[0]);
+    assert.match(error.cause.message, /Failed to generate the application schema.*exit code 3/);
+    assert.equal(error.cause.exitCode, 3);
+    assert.match(error.errors[1].message, /simulated administrative connection close failure/);
+    return true;
+  });
+
+  assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 3 }]);
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.runTestProcess, false, "roster tests did not start");
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "connection termination was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
   await assertResourcesRemoved(harness.state);
 });
 

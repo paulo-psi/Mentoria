@@ -93,7 +93,14 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
       error.exitCode = generation.status ?? 1;
       throw error;
     }
-    if (generation.status !== 0) throw new Error("Failed to generate the application schema for roster tests.");
+    if (generation.status !== 0) {
+      const exitCode = generation.status ?? 1;
+      const error = new Error(
+        `Failed to generate the application schema for roster tests (exit code ${exitCode}).`,
+      );
+      error.exitCode = exitCode;
+      throw error;
+    }
     const migrations = (await fs.readdir(migrationsDir)).filter((name) => name.endsWith(".sql"));
     if (migrations.length !== 1) {
       throw new Error("Expected exactly one initial migration from the application schema.");
