@@ -56,7 +56,7 @@ function normalizeSearchText(value: string): string {
     .toLocaleLowerCase('pt-BR');
 }
 
-function Home() {
+export function Home() {
   const [search, setSearch] = useState('');
   const access = useGetAccessPermissions({
     query: {
