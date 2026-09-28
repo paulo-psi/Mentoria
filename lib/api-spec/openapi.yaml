@@ -539,6 +539,25 @@ components:
         sessionCount:
           type: integer
           minimum: 0
+          description: Backward-compatible session total; equivalent to totalSessions.
+        totalSessions:
+          type: integer
+          minimum: 0
+        transversalSessionCount:
+          type: integer
+          minimum: 0
+        lastSessionDate:
+          type: ["string", "null"]
+          format: date
+          description: Calendar date of the most recent session, or null when there are no sessions.
+        lastSessionScore:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 10
+          description: Team NPS for the most recent session, or null when there are no sessions.
+        latestAgreedNextSteps:
+          type: ["string", "null"]
+          description: Agreed next steps from the most recent session, or null when there are no sessions.
       required:
         - id
         - name
@@ -548,6 +567,11 @@ components:
         - mainMentor
         - students
         - sessionCount
+        - totalSessions
+        - transversalSessionCount
+        - lastSessionDate
+        - lastSessionScore
+        - latestAgreedNextSteps
     TeamInput:
       type: object
       properties:

@@ -250,6 +250,16 @@ type Team =
 
   sessionCount: number
 ;
+  totalSessions: number
+;
+  transversalSessionCount: number
+;
+  lastSessionDate: string | null
+;
+  lastSessionScore: number | null
+;
+  latestAgreedNextSteps: string | null
+;
 
 }
 ;
@@ -2504,19 +2514,43 @@ test("team list reports separate session counts for official teams", async () =>
     assert.equal(official.teams.length, officialTeams.length, "the official roster must be imported");
     assert.deepEqual(official.sessions, [], "the official roster starts without sessions");
 
-    const firstTeamFirstSession = await insertOfficialPrincipalSession(official, "2026-03-22");
-    const firstTeamSecondSession = await insertOfficialPrincipalSession(official, "2026-03-29");
+    const firstTeamLatestSession = await insertOfficialPrincipalSession(official, "2026-03-29");
+    const firstTeamOlderSession = await insertOfficialPrincipalSession(official, "2026-03-22");
     const secondTeamSession = await insertOfficialPrincipalSession(official, "2026-04-05", 1);
-    assert.equal(firstTeamFirstSession.teamId, firstTeamSecondSession.teamId);
-    assert.notEqual(firstTeamFirstSession.teamId, secondTeamSession.teamId);
+    assert.equal(firstTeamLatestSession.teamId, firstTeamOlderSession.teamId);
+    assert.notEqual(firstTeamLatestSession.teamId, secondTeamSession.teamId);
+    await db.update(mentoringSessionsTable)
+      .set({ sessionType: "transversal" })
+      .where(eq(mentoringSessionsTable.id, firstTeamLatestSession.id));
 
     await start({ seed: false });
     const rows = await teams();
     const countsByTeamName = new Map(rows.map((team) => [team.name, team.sessionCount]));
+    const firstTeam = rows.find((team) => team.name === officialTeams[0].name);
+    const secondTeam = rows.find((team) => team.name === officialTeams[1].name);
+    const teamWithoutSessions = rows.find((team) => team.name === officialTeams[2].name);
 
     assert.equal(countsByTeamName.get(officialTeams[0].name), 2);
     assert.equal(countsByTeamName.get(officialTeams[1].name), 1);
     assert.equal(countsByTeamName.get(officialTeams[2].name), 0);
+    assert.ok(firstTeam);
+    assert.equal(firstTeam.totalSessions, 2);
+    assert.equal(firstTeam.lastSessionDate, "2026-03-29");
+    assert.equal(typeof firstTeam.lastSessionDate, "string");
+    assert.equal(firstTeam.lastSessionScore, firstTeamLatestSession.teamNps);
+    assert.equal(firstTeam.latestAgreedNextSteps, firstTeamLatestSession.agreedNextSteps);
+    assert.equal(firstTeam.transversalSessionCount, 1);
+    assert.ok(secondTeam);
+    assert.equal(secondTeam.totalSessions, 1);
+    assert.equal(secondTeam.lastSessionDate, "2026-04-05");
+    assert.equal(secondTeam.lastSessionScore, secondTeamSession.teamNps);
+    assert.equal(secondTeam.latestAgreedNextSteps, secondTeamSession.agreedNextSteps);
+    assert.ok(teamWithoutSessions);
+    assert.equal(teamWithoutSessions.totalSessions, 0);
+    assert.equal(teamWithoutSessions.transversalSessionCount, 0);
+    assert.equal(teamWithoutSessions.lastSessionDate, null);
+    assert.equal(teamWithoutSessions.lastSessionScore, null);
+    assert.equal(teamWithoutSessions.latestAgreedNextSteps, null);
   } finally {
     await stop();
     await clearRosterTables();

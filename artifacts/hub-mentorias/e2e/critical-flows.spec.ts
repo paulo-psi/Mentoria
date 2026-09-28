@@ -17,6 +17,11 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     },
     students: [{ id: 1, name: 'Ana Lima', sortOrder: 0 }],
     sessionCount: 0,
+    totalSessions: 0,
+    transversalSessionCount: 0,
+    lastSessionDate: null,
+    lastSessionScore: null,
+    latestAgreedNextSteps: null,
   };
   const createdNames: string[] = [];
   const sessionRequests: Array<Record<string, unknown>> = [];
@@ -55,9 +60,22 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     ];
     else if (method === 'GET' && pathname === '/api/roster-audit') data = [];
     else if (canManage && method === 'POST' && pathname === '/api/teams/1/sessions') {
-      const body = route.request().postDataJSON() as Record<string, unknown>;
+      const body = route.request().postDataJSON() as {
+        sessionDate: string;
+        sessionType: string;
+        teamNps: number;
+        agreedNextSteps: string;
+        [key: string]: unknown;
+      };
       sessionRequests.push(body);
       team.sessionCount += 1;
+      team.totalSessions += 1;
+      if (body.sessionType === 'transversal' || body.sessionType === 'externo') {
+        team.transversalSessionCount += 1;
+      }
+      team.lastSessionDate = body.sessionDate;
+      team.lastSessionScore = body.teamNps;
+      team.latestAgreedNextSteps = body.agreedNextSteps;
       status = 201;
       data = { id: 1, teamId: 1, ...body, createdAt: '2026-03-01T12:00:00.000Z' };
     }
@@ -122,7 +140,9 @@ test('signed-in view-only user can see the roster but cannot open maintenance', 
   await page.getByRole('link', { name: 'Entrar', exact: true }).click();
   await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
   await expect(page).toHaveURL(/\/user-portal$/);
-  await expect(page.getByTestId('card-equipe-1')).toBeVisible();
+  await expect(page.getByTestId('table-executive-teams')).toBeVisible();
+  await expect(page.getByTestId('row-equipe-1')).toBeVisible();
+  await expect(page.getByTestId('text-equipe-1')).toHaveText('Equipe Horizonte');
   await expect(page.getByTestId('link-manter-equipes')).toHaveCount(0);
 
   await page.goto('/manage');
@@ -147,7 +167,7 @@ test('failed permission check keeps maintenance unavailable to a signed-in user'
   await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
   await expect(page).toHaveURL(/\/user-portal$/);
   await failedAccess;
-  await expect(page.getByTestId('card-equipe-1')).toBeVisible();
+  await expect(page.getByTestId('row-equipe-1')).toBeVisible();
   await expect(page.getByTestId('link-manter-equipes')).toHaveCount(0);
 
   await page.goto('/manage');

@@ -1,7 +1,37 @@
-import { asc, count, eq } from "drizzle-orm";
+import { asc, count, desc, eq, sql } from "drizzle-orm";
 import { db, mentorsTable, mentoringSessionsTable, studentsTable, teamsTable } from "@workspace/db";
 
 export async function readTeams(teamId?: number) {
+  const sessionSummary = db
+    .select({
+      teamId: mentoringSessionsTable.teamId,
+      totalSessions: count(mentoringSessionsTable.id).as("total_sessions"),
+      transversalSessionCount: sql<number>`
+        count(*) filter (
+          where ${mentoringSessionsTable.sessionType} in ('transversal', 'externo')
+        )
+      `.mapWith(Number).as("transversal_session_count"),
+    })
+    .from(mentoringSessionsTable)
+    .groupBy(mentoringSessionsTable.teamId)
+    .as("session_summary");
+
+  const latestSession = db
+    .selectDistinctOn([mentoringSessionsTable.teamId], {
+      teamId: mentoringSessionsTable.teamId,
+      sessionDate: mentoringSessionsTable.sessionDate,
+      teamNps: mentoringSessionsTable.teamNps,
+      agreedNextSteps: mentoringSessionsTable.agreedNextSteps,
+    })
+    .from(mentoringSessionsTable)
+    .orderBy(
+      mentoringSessionsTable.teamId,
+      desc(mentoringSessionsTable.sessionDate),
+      desc(mentoringSessionsTable.createdAt),
+      desc(mentoringSessionsTable.id),
+    )
+    .as("latest_session");
+
   const rows = await db
     .select({
       id: teamsTable.id,
@@ -14,13 +44,20 @@ export async function readTeams(teamId?: number) {
       mentorEmail: mentorsTable.email,
       mentorExpertiseArea: mentorsTable.expertiseArea,
       mentorType: mentorsTable.mentorType,
-      sessionCount: count(mentoringSessionsTable.id),
+      sessionCount: sql<number>`coalesce(${sessionSummary.totalSessions}, 0)`.mapWith(Number),
+      totalSessions: sql<number>`coalesce(${sessionSummary.totalSessions}, 0)`.mapWith(Number),
+      transversalSessionCount: sql<number>`
+        coalesce(${sessionSummary.transversalSessionCount}, 0)
+      `.mapWith(Number),
+      lastSessionDate: latestSession.sessionDate,
+      lastSessionScore: latestSession.teamNps,
+      latestAgreedNextSteps: latestSession.agreedNextSteps,
     })
     .from(teamsTable)
     .innerJoin(mentorsTable, eq(teamsTable.mainMentorId, mentorsTable.id))
-    .leftJoin(mentoringSessionsTable, eq(mentoringSessionsTable.teamId, teamsTable.id))
+    .leftJoin(sessionSummary, eq(sessionSummary.teamId, teamsTable.id))
+    .leftJoin(latestSession, eq(latestSession.teamId, teamsTable.id))
     .where(teamId === undefined ? undefined : eq(teamsTable.id, teamId))
-    .groupBy(teamsTable.id, mentorsTable.id)
     .orderBy(asc(teamsTable.id));
 
   const studentRows = await db
@@ -60,5 +97,10 @@ export async function readTeams(teamId?: number) {
       sortOrder,
     })),
     sessionCount: row.sessionCount,
+    totalSessions: row.totalSessions,
+    transversalSessionCount: row.transversalSessionCount,
+    lastSessionDate: row.lastSessionDate,
+    lastSessionScore: row.lastSessionScore,
+    latestAgreedNextSteps: row.latestAgreedNextSteps,
   }));
 }

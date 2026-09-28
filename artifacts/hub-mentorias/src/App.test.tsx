@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Team } from '@workspace/api-client-react';
 import { Home } from './App';
 
 const { getDashboardStats, getTeams } = vi.hoisted(() => ({
@@ -25,18 +26,48 @@ vi.mock('./auth', () => ({
   UserProfileButton: () => null,
 }));
 
-const roster = [
+const roster: Team[] = [
   {
     id: 1,
     name: 'Equipe Educação',
-    mainMentor: { name: 'João Araújo' },
+    pitchSummary: 'Ferramentas digitais para apoiar a aprendizagem.',
+    currentStage: 'Validação',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    mainMentor: {
+      id: 1,
+      name: 'João Araújo',
+      email: null,
+      expertiseArea: 'Educação & Produto',
+      mentorType: null,
+    },
     students: [{ id: 1, name: 'Lívia Gonçalves', sortOrder: 1 }],
+    sessionCount: 3,
+    totalSessions: 3,
+    transversalSessionCount: 1,
+    lastSessionDate: '2026-03-29',
+    lastSessionScore: 8,
+    latestAgreedNextSteps: 'Concluir testes com usuários.',
   },
   {
     id: 2,
     name: 'Equipe Saúde',
-    mainMentor: { name: 'Márcia Évora' },
+    pitchSummary: 'Acompanhamento de saúde preventiva.',
+    currentStage: 'Descoberta',
+    createdAt: '2026-01-02T00:00:00.000Z',
+    mainMentor: {
+      id: 2,
+      name: 'Márcia Évora',
+      email: null,
+      expertiseArea: 'Saúde & Produto',
+      mentorType: null,
+    },
     students: [{ id: 2, name: 'César Nóbrega', sortOrder: 1 }],
+    sessionCount: 0,
+    totalSessions: 0,
+    transversalSessionCount: 0,
+    lastSessionDate: null,
+    lastSessionScore: null,
+    latestAgreedNextSteps: null,
   },
 ];
 
@@ -104,11 +135,10 @@ describe('busca de equipes', () => {
     await user.type(input, query);
 
     expect(input).toHaveProperty('value', query);
-    const card = screen.getByTestId(`card-equipe-${id}`);
-    expect(screen.queryByTestId(`card-equipe-${id === 1 ? 2 : 1}`)).toBeNull();
-    expect(within(card).getByText(roster[id - 1].name)).toBeTruthy();
-    expect(within(card).getByText(roster[id - 1].mainMentor.name)).toBeTruthy();
-    expect(within(card).getByText(roster[id - 1].students[0].name)).toBeTruthy();
+    const row = screen.getByTestId(`row-equipe-${id}`);
+    expect(screen.queryByTestId(`row-equipe-${id === 1 ? 2 : 1}`)).toBeNull();
+    expect(within(row).getByText(roster[id - 1].name)).toBeTruthy();
+    expect(within(row).getByText(roster[id - 1].mainMentor.name)).toBeTruthy();
   });
 
   it.each([
@@ -131,11 +161,10 @@ describe('busca de equipes', () => {
     await user.paste(query);
 
     expect(input).toHaveProperty('value', query);
-    const card = screen.getByTestId('card-equipe-1');
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
-    expect(within(card).getByText('Equipe D’Ávila')).toBeTruthy();
-    expect(within(card).getByText('João-Maria')).toBeTruthy();
-    expect(within(card).getByText('Ana‑Clara')).toBeTruthy();
+    const row = screen.getByTestId('row-equipe-1');
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
+    expect(within(row).getByText('Equipe D’Ávila')).toBeTruthy();
+    expect(within(row).getByText('João-Maria')).toBeTruthy();
   });
 
   it('encontra uma equipe quando a busca colada contém espaço não separável sem mudar o nome exibido', async () => {
@@ -148,11 +177,10 @@ describe('busca de equipes', () => {
     await user.paste(query);
 
     expect(input).toHaveProperty('value', query);
-    const card = screen.getByTestId('card-equipe-1');
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
-    expect(within(card).getByText('Equipe Educação')).toBeTruthy();
-    expect(within(card).getByText('João Araújo')).toBeTruthy();
-    expect(within(card).getByText('Lívia Gonçalves')).toBeTruthy();
+    const row = screen.getByTestId('row-equipe-1');
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
+    expect(within(row).getByText('Equipe Educação')).toBeTruthy();
+    expect(within(row).getByText('João Araújo')).toBeTruthy();
   });
 
   it('encontra uma equipe quando a busca colada usa acentos combinantes sem mudar o nome exibido', async () => {
@@ -165,11 +193,10 @@ describe('busca de equipes', () => {
     await user.paste(query);
 
     expect(input).toHaveProperty('value', query);
-    const card = screen.getByTestId('card-equipe-1');
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
-    expect(within(card).getByText('Equipe Educação')).toBeTruthy();
-    expect(within(card).getByText('João Araújo')).toBeTruthy();
-    expect(within(card).getByText('Lívia Gonçalves')).toBeTruthy();
+    const row = screen.getByTestId('row-equipe-1');
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
+    expect(within(row).getByText('Equipe Educação')).toBeTruthy();
+    expect(within(row).getByText('João Araújo')).toBeTruthy();
   });
 
   it('encontra nome com marca combinante suplementar em busca colada sem alterar a grafia exibida', async () => {
@@ -196,9 +223,9 @@ describe('busca de equipes', () => {
     await user.paste('Ana');
 
     expect(input).toHaveProperty('value', 'Ana');
-    const card = screen.getByTestId('card-equipe-1');
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
-    expect(within(card).getByText(nameWithSupplementalMark)).toBeTruthy();
+    const row = screen.getByTestId('row-equipe-1');
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
+    expect(within(row).getByText('Equipe Educação')).toBeTruthy();
   });
 
   it('preserva sinais vocálicos que distinguem nomes em outros sistemas de escrita', async () => {
@@ -224,8 +251,8 @@ describe('busca de equipes', () => {
     await user.paste('कु');
 
     expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
-    expect(screen.queryByTestId('card-equipe-1')).toBeNull();
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+    expect(screen.queryByTestId('row-equipe-1')).toBeNull();
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
   });
 
   it('não encontra equipe com uma busca que atravessa campos de nome diferentes', async () => {
@@ -236,8 +263,8 @@ describe('busca de equipes', () => {
     await user.type(input, 'educacao joao');
 
     expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
-    expect(screen.queryByTestId('card-equipe-1')).toBeNull();
-    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+    expect(screen.queryByTestId('row-equipe-1')).toBeNull();
+    expect(screen.queryByTestId('row-equipe-2')).toBeNull();
   });
 
   it('mostra o estado sem resultados e limpa a busca, restaurando os nomes originais', async () => {
@@ -247,13 +274,13 @@ describe('busca de equipes', () => {
 
     await user.type(input, 'nome inexistente');
     expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
-    expect(screen.queryByTestId('card-equipe-1')).toBeNull();
+    expect(screen.queryByTestId('row-equipe-1')).toBeNull();
     expect(input).toHaveProperty('value', 'nome inexistente');
 
     await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
     expect(input).toHaveProperty('value', '');
-    expect(screen.getByTestId('card-equipe-1')).toBeTruthy();
-    expect(screen.getByTestId('card-equipe-2')).toBeTruthy();
+    expect(screen.getByTestId('row-equipe-1')).toBeTruthy();
+    expect(screen.getByTestId('row-equipe-2')).toBeTruthy();
     expect(screen.getByText('Equipe Educação')).toBeTruthy();
     expect(screen.getByText('Equipe Saúde')).toBeTruthy();
     expect(screen.queryByTestId('state-vazio-equipes')).toBeNull();
@@ -276,6 +303,50 @@ describe('busca de equipes', () => {
     expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
     expect(screen.getByText('Nenhuma equipe neste ciclo.')).toBeTruthy();
+  });
+});
+
+describe('tabela executiva de equipes', () => {
+  it('exibe dados agregados e mantém o botão de dossiê como placeholder', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(screen.getByTestId('text-equipes-heading').textContent).toBe('Equipes em Acompanhamento');
+    expect(screen.getByTestId('text-equipes-count').textContent).toBe('2 startups ativas no ciclo');
+    expect(screen.getByTestId('table-executive-teams')).toBeTruthy();
+
+    const row = screen.getByTestId('row-equipe-1');
+    expect(within(row).getByTestId('text-proposta-1').textContent).toContain('Ferramentas digitais');
+    expect(within(row).getByTestId('text-estagio-1').textContent).toBe('Validação');
+    expect(within(row).getByTestId('text-mentor-1').textContent).toBe('João Araújo');
+    expect(within(row).getByTestId('text-sessoes-1').textContent).toBe('3 sessões');
+    expect(within(row).getByTestId('text-sessoes-transversais-1').textContent).toContain('1 transversal/externa');
+    expect(within(row).getByTestId('text-ultima-avaliacao-1').textContent).toBe('8/10');
+    expect(row.textContent).toContain('29/03/2026');
+    expect(within(row).getByTestId('text-proximo-passo-1').textContent).toBe('Concluir testes com usuários.');
+
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Educação' }));
+    expect(info).toHaveBeenCalledWith('Dossiê completo disponível no Marco 3.', {
+      teamId: 1,
+      teamName: 'Equipe Educação',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    info.mockRestore();
+  });
+
+  it('mostra linhas skeleton enquanto as equipes carregam', () => {
+    getTeams.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      isFetching: true,
+      refetch: vi.fn(),
+    });
+    render(<Home />);
+
+    expect(screen.getByTestId('loading-equipes')).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Carregando equipes' })).toBeTruthy();
   });
 });
 

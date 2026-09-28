@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Search,
   UsersRound,
-  Waypoints,
 } from 'lucide-react';
 import {
   getGetAccessPermissionsQueryKey,
@@ -51,6 +50,7 @@ import {
   UserProfileButton,
 } from './auth';
 import { DashboardKpis } from '@/components/dashboard-kpis';
+import { TeamsExecutiveTable, TeamsTableSkeleton } from '@/components/teams-executive-table';
 
 const queryClient = new QueryClient();
 
@@ -114,7 +114,6 @@ export function Home() {
     apiAvailable &&
     health.data?.status === 'ok' &&
     health.data.database === 'connected';
-  const studentCount = teams.data?.reduce((total, team) => total + team.students.length, 0) ?? 0;
   const accessDenied = teams.error?.status === 403;
 
   const refreshAll = () => {
@@ -171,6 +170,7 @@ export function Home() {
       </header>
 
       <main className="mx-auto max-w-[1080px] px-5 pb-12 pt-10 sm:px-8">
+        <h1 className="sr-only">Painel de mentorias do PIBEP 2026</h1>
         <DashboardKpis
           data={dashboardStats.data}
           isError={dashboardStats.isError}
@@ -178,54 +178,50 @@ export function Home() {
           onRetry={() => void dashboardStats.refetch()}
         />
 
-        <div className="mb-9">
-          <div
-            className={`mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              connected
-                ? 'bg-emerald-100 text-emerald-800'
-                : health.isLoading || healthCheck.isLoading
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-red-100 text-red-800'
-            }`}
-            data-testid="status-api"
-            role="status"
-          >
-            {connected ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
-            {connected
-              ? 'API Conectada'
-              : health.isLoading || healthCheck.isLoading
-                ? 'Verificando conexão'
-                : 'API Indisponível'}
-          </div>
-          <h1 className="font-display text-[40px] leading-tight tracking-[-0.04em] sm:text-[48px]">
-            Equipes
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Relação oficial de equipes, mentores e estudantes do PIBEP 2026 · 16ª edição.
-          </p>
-        </div>
-
-        <section>
-            <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-              <div>
-                <div className="mb-2 font-mono-ui text-[10px] uppercase tracking-[0.17em] text-muted-foreground">
-                  PIBEP 2026 · 16ª edição
-                </div>
-                <h2 className="font-display text-2xl tracking-[-0.035em]">
-                  {teams.isLoading
-                    ? 'Carregando equipes…'
-                    : teams.isError
-                      ? accessDenied ? 'Acesso pendente' : 'Equipes indisponíveis'
-                      : `${teams.data?.length ?? 0} equipes · ${studentCount} estudantes`}
-                </h2>
+        <section aria-labelledby="heading-equipes" className="font-inter">
+          <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+            <div>
+              <h2
+                className="text-base font-semibold text-zinc-900"
+                data-testid="text-equipes-heading"
+                id="heading-equipes"
+              >
+                Equipes em Acompanhamento
+              </h2>
+              <p className="mt-1 text-xs text-zinc-500" data-testid="text-equipes-count">
+                {teams.isLoading
+                  ? 'Carregando startups…'
+                  : teams.isError
+                    ? 'A lista de equipes está indisponível'
+                    : `${teams.data?.length ?? 0} startups ativas no ciclo`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div
+                className={`inline-flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-xs font-semibold ${
+                  connected
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : health.isLoading || healthCheck.isLoading
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-red-100 text-red-800'
+                }`}
+                data-testid="status-api"
+                role="status"
+              >
+                {connected ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
+                {connected
+                  ? 'API Conectada'
+                  : health.isLoading || healthCheck.isLoading
+                    ? 'Verificando conexão'
+                    : 'API Indisponível'}
               </div>
               <label className="relative block w-full sm:w-[242px]">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
                   size={15}
                 />
                 <input
-                  className="h-10 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground/75 focus:ring-2 focus:ring-primary/20"
+                  className="h-10 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-xs text-zinc-800 outline-none transition-shadow placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
                   aria-label="Buscar equipe, mentor ou estudante"
                   data-testid="input-buscar-equipes"
                   onChange={(event) => setSearch(event.target.value)}
@@ -235,86 +231,19 @@ export function Home() {
                 />
               </label>
             </div>
+          </div>
 
-            {teams.isLoading ? (
-              <TeamSkeletonGrid />
-            ) : teams.isError ? (
-              accessDenied ? <AccessDeniedState /> : <ErrorState onRetry={refreshAll} />
-            ) : filteredTeams.length === 0 ? (
-              <EmptyState hasSearch={Boolean(search)} onClear={() => setSearch('')} />
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {filteredTeams.map((team, index) => (
-                  <TeamCard index={index} key={team.id} team={team} />
-                ))}
-              </div>
-            )}
+          {teams.isLoading ? (
+            <TeamsTableSkeleton />
+          ) : teams.isError ? (
+            accessDenied ? <AccessDeniedState /> : <ErrorState onRetry={refreshAll} />
+          ) : filteredTeams.length === 0 ? (
+            <EmptyState hasSearch={Boolean(search)} onClear={() => setSearch('')} />
+          ) : (
+            <TeamsExecutiveTable teams={filteredTeams} />
+          )}
         </section>
       </main>
-    </div>
-  );
-}
-
-function TeamCard({
-  team,
-  index,
-}: {
-  team: {
-    id: number;
-    name: string;
-    mainMentor: {
-      name: string;
-    };
-    students: { id: number; name: string; sortOrder: number }[];
-  };
-  index: number;
-}) {
-  return (
-    <article
-      className={`animate-rise-in delay-${Math.min(index + 3, 5)} group rounded-2xl border border-border bg-card p-5 transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-27px_hsl(184_26%_17%_/_0.6)]`}
-      data-testid={`card-equipe-${team.id}`}
-    >
-      <div className="flex items-start gap-3 border-b border-border/70 pb-4">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Waypoints size={17} />
-        </span>
-        <div className="min-w-0">
-          <h3 className="font-display text-[25px] tracking-[-0.04em]" data-testid={`text-equipe-${team.id}`}>
-            {team.name}
-          </h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground" data-testid={`text-mentor-${team.id}`}>
-            Mentor responsável: <span className="font-semibold text-foreground">{team.mainMentor.name}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4">
-        <div className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          <UsersRound size={13} />
-          Estudantes ({team.students.length})
-        </div>
-        <ul className="list-disc space-y-1.5 pl-5 text-xs leading-5 text-foreground/85" data-testid={`lista-estudantes-${team.id}`}>
-          {team.students.map((student) => (
-            <li key={student.id}>{student.name}</li>
-          ))}
-        </ul>
-      </div>
-    </article>
-  );
-}
-
-function TeamSkeletonGrid() {
-  return (
-    <div className="grid gap-3 md:grid-cols-2" data-testid="loading-equipes">
-      {Array.from({ length: 6 }).map((_, index) => (
-        <div className="h-[250px] animate-pulse rounded-2xl border border-border bg-card p-5" key={index}>
-          <div className="h-5 w-24 rounded bg-muted" />
-          <div className="mt-6 h-8 w-52 rounded bg-muted" />
-          <div className="mt-3 h-4 w-4/5 rounded bg-muted" />
-          <div className="mt-10 h-px bg-muted" />
-          <div className="mt-5 h-8 w-40 rounded bg-muted" />
-        </div>
-      ))}
     </div>
   );
 }

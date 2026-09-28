@@ -1,5 +1,6 @@
 - [Clerk production proxy](clerk-production-proxy.md) — the frontend proxy URL is injected outside the repository in production; keep the canonical unconditional Clerk wiring.
 - [Drizzle CLI limitations](drizzle-cli.md) — schema generation rejects combined config/output flags; invoke the installed CLI rather than resolving its private entrypoint.
+- [Drizzle subquery aliases](drizzle-subquery-aliases.md) — raw SQL expressions selected into subqueries need explicit aliases before outer queries can reference them.
 - [PostgreSQL URL database precedence](pg-url-database-precedence.md) — the installed pg client and conservative fake disagree about conflicting URL database options.
 - [Release gate scope](release-gate-scope.md) — GitHub tag releases can require CI, but Replit Publish is a separate user action and is not blocked by GitHub checks.
 - [Independent workflow validation](independent-workflow-validation.md) — self-lint cannot catch an invalid workflow before GitHub rejects it; keep PR validation independent of release jobs.

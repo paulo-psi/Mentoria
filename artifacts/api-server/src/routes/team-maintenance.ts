@@ -156,7 +156,8 @@ router.post("/teams", requireApprovedUser, requireAdministrator, async (req, res
 
     const [team] = await readTeams(teamId);
     req.log.info({ teamId }, "Team created");
-    res.status(201).json(CreateTeamResponse.parse(team));
+    CreateTeamResponse.parse(team);
+    res.status(201).json(team);
   } catch (error) {
     if (isDatabaseError(error, "23505")) {
       res.status(409).json({ error: "Já existe uma equipe com esse nome." });
@@ -253,7 +254,8 @@ router.patch("/teams/:teamId", requireApprovedUser, requireAdministrator, async 
 
     const [team] = await readTeams(result.id);
     req.log.info({ teamId: result.id }, "Team updated");
-    res.json(UpdateTeamResponse.parse(team));
+    UpdateTeamResponse.parse(team);
+    res.json(team);
   } catch (error) {
     if (isDatabaseError(error, "23505")) {
       res.status(409).json({ error: "Já existe uma equipe com esse nome." });

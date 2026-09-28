@@ -83,6 +83,13 @@ export const getTeamsResponseStudentsItemSortOrderMin = 0;
 
 export const getTeamsResponseSessionCountMin = 0;
 
+export const getTeamsResponseTotalSessionsMin = 0;
+
+export const getTeamsResponseTransversalSessionCountMin = 0;
+
+export const getTeamsResponseLastSessionScoreMin = 0;
+export const getTeamsResponseLastSessionScoreMax = 10;
+
 
 
 export const GetTeamsResponseItem = zod.object({
@@ -103,7 +110,12 @@ export const GetTeamsResponseItem = zod.object({
   "name": zod.string(),
   "sortOrder": zod.number().int().min(getTeamsResponseStudentsItemSortOrderMin)
 })),
-  "sessionCount": zod.number().int().min(getTeamsResponseSessionCountMin)
+  "sessionCount": zod.number().int().min(getTeamsResponseSessionCountMin).describe('Backward-compatible session total; equivalent to totalSessions.'),
+  "totalSessions": zod.number().int().min(getTeamsResponseTotalSessionsMin),
+  "transversalSessionCount": zod.number().int().min(getTeamsResponseTransversalSessionCountMin),
+  "lastSessionDate": zod.coerce.date().nullable().describe('Calendar date of the most recent session, or null when there are no sessions.'),
+  "lastSessionScore": zod.number().int().min(getTeamsResponseLastSessionScoreMin).max(getTeamsResponseLastSessionScoreMax).nullable().describe('Team NPS for the most recent session, or null when there are no sessions.'),
+  "latestAgreedNextSteps": zod.string().nullable().describe('Agreed next steps from the most recent session, or null when there are no sessions.')
 })
 export const GetTeamsResponse = zod.array(GetTeamsResponseItem)
 
@@ -128,6 +140,13 @@ export const createTeamResponseStudentsItemSortOrderMin = 0;
 
 export const createTeamResponseSessionCountMin = 0;
 
+export const createTeamResponseTotalSessionsMin = 0;
+
+export const createTeamResponseTransversalSessionCountMin = 0;
+
+export const createTeamResponseLastSessionScoreMin = 0;
+export const createTeamResponseLastSessionScoreMax = 10;
+
 
 
 export const CreateTeamResponse = zod.object({
@@ -148,7 +167,12 @@ export const CreateTeamResponse = zod.object({
   "name": zod.string(),
   "sortOrder": zod.number().int().min(createTeamResponseStudentsItemSortOrderMin)
 })),
-  "sessionCount": zod.number().int().min(createTeamResponseSessionCountMin)
+  "sessionCount": zod.number().int().min(createTeamResponseSessionCountMin).describe('Backward-compatible session total; equivalent to totalSessions.'),
+  "totalSessions": zod.number().int().min(createTeamResponseTotalSessionsMin),
+  "transversalSessionCount": zod.number().int().min(createTeamResponseTransversalSessionCountMin),
+  "lastSessionDate": zod.coerce.date().nullable().describe('Calendar date of the most recent session, or null when there are no sessions.'),
+  "lastSessionScore": zod.number().int().min(createTeamResponseLastSessionScoreMin).max(createTeamResponseLastSessionScoreMax).nullable().describe('Team NPS for the most recent session, or null when there are no sessions.'),
+  "latestAgreedNextSteps": zod.string().nullable().describe('Agreed next steps from the most recent session, or null when there are no sessions.')
 })
 
 
@@ -181,6 +205,13 @@ export const updateTeamResponseStudentsItemSortOrderMin = 0;
 
 export const updateTeamResponseSessionCountMin = 0;
 
+export const updateTeamResponseTotalSessionsMin = 0;
+
+export const updateTeamResponseTransversalSessionCountMin = 0;
+
+export const updateTeamResponseLastSessionScoreMin = 0;
+export const updateTeamResponseLastSessionScoreMax = 10;
+
 
 
 export const UpdateTeamResponse = zod.object({
@@ -201,7 +232,12 @@ export const UpdateTeamResponse = zod.object({
   "name": zod.string(),
   "sortOrder": zod.number().int().min(updateTeamResponseStudentsItemSortOrderMin)
 })),
-  "sessionCount": zod.number().int().min(updateTeamResponseSessionCountMin)
+  "sessionCount": zod.number().int().min(updateTeamResponseSessionCountMin).describe('Backward-compatible session total; equivalent to totalSessions.'),
+  "totalSessions": zod.number().int().min(updateTeamResponseTotalSessionsMin),
+  "transversalSessionCount": zod.number().int().min(updateTeamResponseTransversalSessionCountMin),
+  "lastSessionDate": zod.coerce.date().nullable().describe('Calendar date of the most recent session, or null when there are no sessions.'),
+  "lastSessionScore": zod.number().int().min(updateTeamResponseLastSessionScoreMin).max(updateTeamResponseLastSessionScoreMax).nullable().describe('Team NPS for the most recent session, or null when there are no sessions.'),
+  "latestAgreedNextSteps": zod.string().nullable().describe('Agreed next steps from the most recent session, or null when there are no sessions.')
 })
 
 

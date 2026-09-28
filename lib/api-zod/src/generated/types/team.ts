@@ -18,6 +18,30 @@ export interface Team {
   createdAt: Date;
   mainMentor: Mentor;
   students: Student[];
-  /** @minimum 0 */
+  /**
+     * Backward-compatible session total; equivalent to totalSessions.
+     * @minimum 0
+     */
   sessionCount: number;
+  /** @minimum 0 */
+  totalSessions: number;
+  /** @minimum 0 */
+  transversalSessionCount: number;
+  /**
+     * Calendar date of the most recent session, or null when there are no sessions.
+     * @nullable
+     */
+  lastSessionDate: Date | null;
+  /**
+     * Team NPS for the most recent session, or null when there are no sessions.
+     * @minimum 0
+     * @maximum 10
+     * @nullable
+     */
+  lastSessionScore: number | null;
+  /**
+     * Agreed next steps from the most recent session, or null when there are no sessions.
+     * @nullable
+     */
+  latestAgreedNextSteps: string | null;
 }
