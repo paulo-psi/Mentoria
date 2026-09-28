@@ -93,8 +93,19 @@ test("the release job runs and requires the eligibility test before publishing",
   const releaseJob = workflow.slice(releaseJobStart);
   const gateStep = releaseJob.indexOf("run: bash .github/scripts/verify-tagged-commit.sh");
   const publishStep = releaseJob.indexOf("run: gh release create");
+  const gateStepStart = releaseJob.indexOf("- name: Verify tagged commit is merged to main");
+  const publishStepStart = releaseJob.indexOf("- name: Publish only after live isolation succeeds");
 
   assert.match(workflow, /release-gate-validation:[\s\S]*?node --test \.github\/workflows\/release-gate\.test\.mjs/);
   assert.match(releaseJob, /needs: \[live-database-isolation, release-gate-validation\]/);
-  assert.ok(gateStep >= 0 && publishStep > gateStep, "tag eligibility is checked before publishing");
+  assert.ok(
+    gateStepStart >= 0 && publishStepStart > gateStepStart &&
+      gateStep >= gateStepStart && publishStep > publishStepStart,
+    "tag eligibility is checked before publishing",
+  );
+  assert.doesNotMatch(
+    releaseJob.slice(gateStepStart, publishStepStart),
+    /^\s*(?:if|continue-on-error):/m,
+    "the eligibility step must not be skipped or ignored",
+  );
 });
