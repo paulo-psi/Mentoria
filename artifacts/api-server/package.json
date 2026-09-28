@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:roster": "node ./test/run.mjs",
     "test:roster-runner": "node --test ./test/run.test.mjs",
+    "test:roster-runner:live": "node --test ./test/run.live.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
