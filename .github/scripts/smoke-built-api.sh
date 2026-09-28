@@ -70,6 +70,7 @@ CLERK_SECRET_KEY="sk_test_ci_smoke_placeholder" \
 node --enable-source-maps artifacts/api-server/dist/index.mjs \
   >"$smoke_dir/server.log" 2>&1 &
 server_pid=$!
+echo "Built API smoke server PID: $server_pid" >&2
 
 ready=false
 for _ in {1..45}; do

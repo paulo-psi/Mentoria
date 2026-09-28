@@ -49,6 +49,8 @@ jobs:
         run: pnpm --filter @workspace/api-server run build
       - name: Smoke-test built API with disposable PostgreSQL
         run: bash .github/scripts/smoke-built-api.sh
+      - name: Confirm failed smoke checks stop the built API
+        run: node --test .github/scripts/smoke-built-api.test.mjs
 
   web-validation:
     name: Web validation
