@@ -654,6 +654,49 @@ test("renaming one official mentor or team preserves every roster table on start
   });
 });
 
+test("a newly recorded official session survives startup seeding", async () => {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    const team = official.teams.find(({ name }) => name === officialTeams[0].name);
+    const mentor = official.mentors.find(({ name }) => name === officialTeams[0].mentor);
+    assert.ok(team);
+    assert.ok(mentor);
+    assert.equal(team.mainMentorId, mentor.id);
+    const [session] = await db.insert(mentoringSessionsTable).values({
+      teamId: team.id,
+      mentorId: mentor.id,
+      sessionType: "principal",
+      sessionDate: "2026-03-01",
+      teamNps: 9,
+      teamActionability: 8,
+      mentorCommitment: 9,
+      mentorTraction: 7,
+      teamFeedbackStrongPoints: "Boa colaboração",
+      teamFeedbackImprovements: "Aprimorar o planejamento",
+      agreedNextSteps: "Revisar o próximo ciclo",
+      mentorQualitativeAssessment: "Evolução consistente",
+    }).returning();
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, [session], "the new official session must be present before startup");
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "startup must preserve the official mentors, teams, students and newly recorded session",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
 test("a failed official roster insert rolls back the complete legacy replacement", async () => {
   await clearRosterTables();
   let triggerCreated = false;
