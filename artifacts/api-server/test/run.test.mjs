@@ -180,7 +180,8 @@ function createHarness(mode) {
       if (
         mode === "drop-and-temp-failure" ||
         mode === "roster-and-temp-failure" ||
-        mode === "admin-connect-and-temp-failure"
+        mode === "admin-connect-and-temp-failure" ||
+        mode === "successful-roster-and-temp-failure"
       ) {
         throw new Error("simulated temporary-directory removal failure");
       }
@@ -582,6 +583,31 @@ test("successful schema generation runs tests and removes all resources", async 
   assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 0 }]);
   assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
   await assertResourcesRemoved(harness.state);
+});
+
+test("successful roster tests report temporary-directory cleanup failure", async () => {
+  const harness = createHarness("successful-roster-and-temp-failure");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.match(error.message, /simulated temporary-directory removal failure/);
+      return true;
+    });
+
+    assert.equal(harness.state.runTestProcess, true, "the roster test process completed successfully");
+    assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+    assert.deepEqual(
+      harness.state.droppedDatabases,
+      harness.state.createdDatabases,
+      "the disposable database was dropped",
+    );
+    assert.equal(harness.state.adminEnded, true, "the administrative connection was closed");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("a conflicting source database query option cannot redirect fixture setup", async () => {
