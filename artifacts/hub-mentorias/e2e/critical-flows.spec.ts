@@ -19,6 +19,7 @@ async function mockRosterApi(page: Page, canManage = true) {
     sessionCount: 0,
   };
   const createdNames: string[] = [];
+  const renameRequests: Array<{ name: string; expectedName: string }> = [];
   const mutationRequests: string[] = [];
   const unexpectedRequests: string[] = [];
 
@@ -42,6 +43,17 @@ async function mockRosterApi(page: Page, canManage = true) {
       team.students.push(student);
       status = 201;
       data = student;
+    } else if (canManage && method === 'PATCH' && pathname === '/api/teams/1/students/1') {
+      const body = route.request().postDataJSON() as { name: string; expectedName: string };
+      renameRequests.push(body);
+      if (body.expectedName !== team.students[0].name) {
+        status = 409;
+        data = { error: 'O estudante mudou em outra sessão. Atualize a relação antes de salvar novamente.' };
+      } else {
+        const student: Student = { ...team.students[0], name: body.name };
+        team.students[0] = student;
+        data = student;
+      }
     } else {
       unexpectedRequests.push(`${method} ${pathname}`);
       status = 501;
@@ -51,7 +63,13 @@ async function mockRosterApi(page: Page, canManage = true) {
     await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
   });
 
-  return { createdNames, mutationRequests, unexpectedRequests };
+  return {
+    createdNames,
+    renameRequests,
+    mutationRequests,
+    unexpectedRequests,
+    changeStudentName: (name: string) => { team.students[0] = { ...team.students[0], name }; },
+  };
 }
 
 test('signed-out visitor reaches sign-in but not the private roster', async ({ page }) => {
@@ -112,5 +130,37 @@ test('test manager signs in, adds a student and sees the saved roster after relo
   await page.reload();
   await page.getByTestId('button-selecionar-equipe-1').click();
   await expect(page.getByTestId('text-estudante-2')).toHaveText('Marina Costa');
+  expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('conflicting student rename keeps the draft and offers to refresh the roster', async ({ page }) => {
+  const api = await mockRosterApi(page);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await page.getByTestId('link-manter-equipes').click();
+  await expect(page).toHaveURL(/\/manage$/);
+
+  await page.getByTestId('button-selecionar-equipe-1').click();
+  await page.getByTestId('button-editar-estudante-1').click();
+  const draft = page.getByTestId('input-editar-estudante-1');
+  await draft.fill('Ana Costa');
+  api.changeStudentName('Ana Martins');
+  await page.getByTestId('button-confirmar-edicao-estudante-1').click();
+
+  await expect(page.getByTestId('erro-estudante-1')).toContainText('O estudante mudou em outra sessão.');
+  await expect(page.getByTestId('erro-estudante-1-atualizar')).toBeVisible();
+  await expect(draft).toHaveValue('Ana Costa');
+  await expect(page.getByTestId('status-alteracao')).toHaveCount(0);
+  expect(api.renameRequests, 'rename uses the outdated name seen by the administrator').toEqual([
+    { name: 'Ana Costa', expectedName: 'Ana Lima' },
+  ]);
+
+  await page.getByTestId('erro-estudante-1-atualizar').click();
+  await expect(page.getByTestId('status-nome-alterado-estudante-1')).toContainText('Ana Martins');
+  await expect(draft).toHaveValue('Ana Costa');
+  await expect(page.getByTestId('status-alteracao')).toHaveCount(0);
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
