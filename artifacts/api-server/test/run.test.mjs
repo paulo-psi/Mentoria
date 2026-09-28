@@ -125,6 +125,7 @@ function createHarness(mode) {
       if (this.isAdmin && (
         mode === "admin-end" ||
         mode === "multiple-cleanup-and-admin-end-failures" ||
+        mode === "signal-test-process-and-admin-end-failure" ||
         mode === "nonzero-roster-and-admin-end-failure"
       )) {
         throw new Error("simulated administrative connection close failure");
@@ -176,7 +177,7 @@ function createHarness(mode) {
     if (mode === "roster-and-drop-failure" || mode === "roster-and-temp-failure") {
       throw new Error("simulated roster test execution failure");
     }
-    if (mode === "signal-test-process") {
+    if (mode === "signal-test-process" || mode === "signal-test-process-and-admin-end-failure") {
       return { status: null, signal: "SIGTERM" };
     }
     return {
@@ -427,6 +428,28 @@ test("test process signal is reported with a nonzero exit code and all resources
 
   assert.equal(harness.state.runTestProcess, true, "the roster test process was attempted");
   await assertResourcesRemoved(harness.state);
+});
+
+test("test process interruption remains visible when the administrative connection cannot close", async () => {
+  const harness = createHarness("signal-test-process-and-admin-end-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.cause, error.errors[0]);
+    assert.match(error.cause.message, /terminated by signal SIGTERM/);
+    assert.equal(error.cause.signal, "SIGTERM");
+    assert.equal(error.cause.exitCode, 1);
+    assert.match(error.errors[1].message, /simulated administrative connection close failure/);
+    return true;
+  });
+
+  assert.equal(harness.state.runTestProcess, true, "the fake roster test process was attempted");
+  assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases, "the disposable database was dropped");
+  assert.equal(harness.state.adminEnded, true, "the administrative connection close was attempted");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  assert.equal(harness.state.tempDirectories.length, 1);
+  await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
 });
 
 test("test bundling failure prevents process start and removes all resources", async () => {
