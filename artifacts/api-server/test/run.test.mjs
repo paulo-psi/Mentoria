@@ -30,6 +30,7 @@ function createHarness(mode) {
     tempDirectoryCreationError: new Error("simulated temporary-directory creation failure"),
     tempConfigWriteAttempts: 0,
     tempConfigWriteError: new Error("simulated temporary-config write failure"),
+    fixtureVerificationError: new Error("simulated fixture database-verification query failure"),
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
   };
 
@@ -113,6 +114,9 @@ function createHarness(mode) {
       }
 
       if (sql === "select current_database() as name") {
+        if (mode === "fixture-verification-query-error") {
+          throw state.fixtureVerificationError;
+        }
         if (mode === "missing-fixture-row") return { rows: [] };
         if (mode === "missing-fixture-database-name") return { rows: [{}] };
         return {
@@ -555,6 +559,25 @@ test("fixture connection failure removes the generated database and temporary fi
   assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL is not applied before connecting");
   assert.equal(harness.state.fixtureEnded, true, "the fixture client is closed after the failed connection");
   assert.equal(harness.state.runTestProcess, false, "the roster test process does not run");
+  await assertResourcesRemoved(harness.state);
+});
+
+test("fixture database-verification query failure blocks fixture SQL and removes resources", async () => {
+  const harness = createHarness("fixture-verification-query-error");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.equal(error, harness.state.fixtureVerificationError);
+    return true;
+  });
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was opened");
+  assert.equal(harness.state.fixtureConnectedDatabase, harness.state.createdDatabases[0]);
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.fixtureReadAttempts, 0, "the generated fixture SQL was not read");
+  assert.equal(harness.state.fixtureEnded, true, "the fixture connection was closed");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+  assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
   await assertResourcesRemoved(harness.state);
 });
 
