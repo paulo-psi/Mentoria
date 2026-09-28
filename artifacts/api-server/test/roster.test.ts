@@ -794,21 +794,28 @@ async function rosterSnapshot()
 async function insertOfficialPrincipalSession(
   official: Awaited<ReturnType<typeof rosterSnapshot>>,
   sessionDate: string,
+  teamIndex = 0,
 ) 
 {
+
+  const teamEntry = officialTeams[teamIndex]
+;
+
+  assert.ok(teamEntry, `official team index ${teamIndex} must exist`)
+;
 
   const team = official.teams.find((
 {
  name 
 }
-) => name === officialTeams[0].name)
+) => name === teamEntry.name)
 ;
 
   const mentor = official.mentors.find((
 {
  name 
 }
-) => name === officialTeams[0].mentor)
+) => name === teamEntry.mentor)
 ;
 
   assert.ok(team)
@@ -2470,6 +2477,43 @@ test("deleting every official session leaves the session list empty after startu
     const apiTeam = (await teams()).find((team) => team.id === firstSession.teamId);
     assert.ok(apiTeam, "the API must continue to return the affected official team");
     assert.equal(apiTeam.sessionCount, 0, "the team list API must report zero sessions after all sessions are deleted");
+  } finally {
+    await stop();
+    await clearRosterTables();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      { mentors: [], teams: [], students: [], sessions: [] },
+      "test cleanup must remove every row it created",
+    );
+  }
+});
+
+test("team list reports separate session counts for official teams", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "session counts must use the disposable test database");
+
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.teams.length, officialTeams.length, "the official roster must be imported");
+    assert.deepEqual(official.sessions, [], "the official roster starts without sessions");
+
+    const firstTeamFirstSession = await insertOfficialPrincipalSession(official, "2026-03-22");
+    const firstTeamSecondSession = await insertOfficialPrincipalSession(official, "2026-03-29");
+    const secondTeamSession = await insertOfficialPrincipalSession(official, "2026-04-05", 1);
+    assert.equal(firstTeamFirstSession.teamId, firstTeamSecondSession.teamId);
+    assert.notEqual(firstTeamFirstSession.teamId, secondTeamSession.teamId);
+
+    await start({ seed: false });
+    const rows = await teams();
+    const countsByTeamName = new Map(rows.map((team) => [team.name, team.sessionCount]));
+
+    assert.equal(countsByTeamName.get(officialTeams[0].name), 2);
+    assert.equal(countsByTeamName.get(officialTeams[1].name), 1);
+    assert.equal(countsByTeamName.get(officialTeams[2].name), 0);
   } finally {
     await stop();
     await clearRosterTables();
