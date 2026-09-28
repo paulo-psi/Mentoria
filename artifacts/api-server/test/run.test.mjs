@@ -14,6 +14,7 @@ const failureSteps = new Set([
   "terminateConnections",
   "dropDatabase",
   "fixtureVerificationQuery",
+  "fixtureRead",
   "applySql",
   "adminEnd",
   "fixtureEnd",
@@ -64,6 +65,7 @@ function createHarness({
     tempConfigWriteAttempts: 0,
     tempConfigWriteError: new Error("simulated temporary-config write failure"),
     fixtureVerificationError: new Error("simulated fixture database-verification query failure"),
+    fixtureReadError: new Error("simulated generated SQL read failure"),
     sourceDatabase,
   };
 
@@ -180,6 +182,9 @@ function createHarness({
     },
     readFile: async () => {
       state.fixtureReadAttempts += 1;
+      if (fails.has("fixtureRead")) {
+        throw state.fixtureReadError;
+      }
       return "CREATE TABLE disposable_fixture (id integer);";
     },
     readdir: async () => migrations,
@@ -662,6 +667,28 @@ test("fixture database-verification query failure blocks fixture SQL and removes
   assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
   assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
   assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+  await assertResourcesRemoved(harness.state);
+});
+
+test("unreadable generated SQL closes the fixture and removes the database and temporary files", async () => {
+  const harness = createHarness({ fail: ["fixtureRead"] });
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.equal(error, harness.state.fixtureReadError);
+    return true;
+  });
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was opened");
+  assert.equal(harness.state.fixtureConnectedDatabase, harness.state.createdDatabases[0]);
+  assert.equal(harness.state.fixtureReadAttempts, 1, "reading the generated SQL was attempted");
+  assert.deepEqual(harness.state.fixtureQueries, [], "no fixture SQL was applied");
+  assert.equal(harness.state.fixtureEnded, true, "the fixture connection was closed");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+  assert.equal(harness.state.runTestProcess, false);
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "database connections were terminated");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
   await assertResourcesRemoved(harness.state);
 });
 
