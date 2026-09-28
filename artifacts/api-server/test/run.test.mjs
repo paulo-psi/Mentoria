@@ -12,6 +12,7 @@ function createHarness(mode) {
     adminConnectAttempts: 0,
     fixtureConnectAttempts: 0,
     fixtureConnectedDatabase: null,
+    fixtureReadAttempts: 0,
     createdDatabases: [],
     droppedDatabases: [],
     dropDatabaseAttempts: 0,
@@ -159,8 +160,17 @@ function createHarness(mode) {
       state.tempDirectories.push(tempDir);
       return tempDir;
     },
-    readFile: async () => "CREATE TABLE disposable_fixture (id integer);",
-    readdir: async () => ["0000_initial.sql"],
+    readFile: async () => {
+      state.fixtureReadAttempts += 1;
+      return "CREATE TABLE disposable_fixture (id integer);";
+    },
+    readdir: async () => {
+      if (mode === "no-generated-migrations") return [];
+      if (mode === "multiple-generated-migrations") {
+        return ["0000_initial.sql", "0001_additional.sql"];
+      }
+      return ["0000_initial.sql"];
+    },
     rm: async (...args) => {
       state.tempDirectoryRemovalAttempts += 1;
       if (
@@ -227,6 +237,23 @@ async function assertResourcesRemoved(state) {
   assert.equal(state.adminEnded, true, "the administrative connection was closed");
   assert.equal(state.tempDirectories.length, 1, "the runner created one isolated temporary directory");
   await assert.rejects(access(state.tempDirectories[0]), { code: "ENOENT" });
+}
+
+async function assertInvalidMigrationListingStopsBeforeFixtures(harness) {
+  await assert.rejects(
+    runWith(harness),
+    /Expected exactly one initial migration from the application schema/,
+  );
+
+  const { state } = harness;
+  assert.deepEqual(state.schemaGenerationResults, [{ status: 0 }], "schema generation succeeded");
+  assert.equal(state.fixtureReadAttempts, 0, "fixture SQL was not read");
+  assert.equal(state.fixtureConnectAttempts, 0, "fixture setup did not start");
+  assert.equal(state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(state.testProcessStartAttempts, 0, "the roster test process was not started");
+  assert.equal(state.runTestProcess, false, "roster tests did not run");
+  await assertResourcesRemoved(state);
 }
 
 async function runWith(harness, envOverrides = {}) {
@@ -315,6 +342,16 @@ test("schema generation failure removes the generated database and temporary fil
   assert.deepEqual(harness.state.schemaGenerationResults, [{ status: 3 }]);
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
+});
+
+test("empty generated migration listing stops before fixtures and removes resources", async () => {
+  await assertInvalidMigrationListingStopsBeforeFixtures(createHarness("no-generated-migrations"));
+});
+
+test("multiple generated migrations stop before fixtures and remove resources", async () => {
+  await assertInvalidMigrationListingStopsBeforeFixtures(
+    createHarness("multiple-generated-migrations"),
+  );
 });
 
 test("schema generation interruption identifies the signal and removes resources", async () => {
