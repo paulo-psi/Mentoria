@@ -115,6 +115,62 @@ describe('busca de equipes', () => {
     expect(within(card).getByText('Lívia Gonçalves')).toBeTruthy();
   });
 
+  it('encontra nome com marca combinante suplementar em busca colada sem alterar a grafia exibida', async () => {
+    const nameWithSupplementalMark = 'A\u1ab0na';
+    getTeams.mockReturnValue({
+      data: roster.map((team) =>
+        team.id === 1
+          ? {
+              ...team,
+              students: [{ ...team.students[0], name: nameWithSupplementalMark }],
+            }
+          : team,
+      ),
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar equipe, mentor ou estudante' });
+
+    await user.click(input);
+    await user.paste('Ana');
+
+    expect(input).toHaveProperty('value', 'Ana');
+    const card = screen.getByTestId('card-equipe-1');
+    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+    expect(within(card).getByText(nameWithSupplementalMark)).toBeTruthy();
+  });
+
+  it('preserva sinais vocálicos que distinguem nomes em outros sistemas de escrita', async () => {
+    getTeams.mockReturnValue({
+      data: roster.map((team) =>
+        team.id === 1
+          ? {
+              ...team,
+              students: [{ ...team.students[0], name: 'कि' }],
+            }
+          : team,
+      ),
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+    const input = screen.getByRole('searchbox', { name: 'Buscar equipe, mentor ou estudante' });
+
+    await user.click(input);
+    await user.paste('कु');
+
+    expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
+    expect(screen.queryByTestId('card-equipe-1')).toBeNull();
+    expect(screen.queryByTestId('card-equipe-2')).toBeNull();
+  });
+
   it('não encontra equipe com uma busca que atravessa campos de nome diferentes', async () => {
     const user = userEvent.setup();
     render(<Home />);

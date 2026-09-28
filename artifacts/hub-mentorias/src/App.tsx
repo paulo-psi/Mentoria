@@ -52,7 +52,7 @@ const queryClient = new QueryClient();
 function normalizeSearchText(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\p{Diacritic}/gu, '')
     .replace(/\s+/g, ' ')
     .toLocaleLowerCase('pt-BR');
 }
