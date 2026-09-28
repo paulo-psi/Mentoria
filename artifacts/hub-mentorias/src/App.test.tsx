@@ -3,23 +3,26 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Home } from './App';
 
-const { getTeams } = vi.hoisted(() => ({
+const { getDashboardStats, getTeams } = vi.hoisted(() => ({
+  getDashboardStats: vi.fn(),
   getTeams: vi.fn(),
 }));
 
 vi.mock('@workspace/api-client-react', () => ({
   getGetAccessPermissionsQueryKey: () => ['access'],
+  getGetDashboardStatsQueryKey: () => ['dashboard-stats'],
   getGetHealthQueryKey: () => ['health'],
   getGetTeamsQueryKey: () => ['teams'],
   getHealthCheckQueryKey: () => ['health-check'],
   useGetAccessPermissions: () => ({ data: { canManage: false }, isError: false, refetch: vi.fn() }),
+  useGetDashboardStats: getDashboardStats,
   useHealthCheck: () => ({ data: { status: 'ok' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetHealth: () => ({ data: { status: 'ok', database: 'connected' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetTeams: getTeams,
 }));
 
 vi.mock('./auth', () => ({
-  LogoutButton: () => null,
+  UserProfileButton: () => null,
 }));
 
 const roster = [
@@ -53,6 +56,18 @@ const punctuationVariantRoster = [
 ];
 
 beforeEach(() => {
+  getDashboardStats.mockReturnValue({
+    data: {
+      totalSessions: 18,
+      avgNps: 8.6,
+      avgTraction: 8.5,
+      networkOpennessRate: 41.7,
+    },
+    isError: false,
+    isFetching: false,
+    isLoading: false,
+    refetch: vi.fn(),
+  });
   getTeams.mockReturnValue({
     data: roster,
     isLoading: false,
@@ -261,5 +276,50 @@ describe('busca de equipes', () => {
     expect(screen.getByText('Nenhuma equipe encontrada.')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
     expect(screen.getByText('Nenhuma equipe neste ciclo.')).toBeTruthy();
+  });
+});
+
+describe('visão geral do ciclo', () => {
+  it('mostra os quatro indicadores retornados pelo hook de métricas', () => {
+    render(<Home />);
+
+    expect(screen.getByTestId('text-dashboard-kpis-heading').textContent).toBe('Visão Geral do Ciclo');
+    expect(screen.getByTestId('value-kpi-sessions').textContent).toBe('18');
+    expect(screen.getByTestId('value-kpi-nps').textContent).toBe('8.6');
+    expect(screen.getByTestId('value-kpi-traction').textContent).toBe('8.5');
+    expect(screen.getByTestId('value-kpi-network-openness').textContent).toBe('41.7%');
+    expect(screen.getByRole('button', { name: 'Novo registro, disponível em uma próxima etapa' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('mostra esqueletos enquanto as métricas carregam', () => {
+    getDashboardStats.mockReturnValue({
+      data: undefined,
+      isError: false,
+      isFetching: true,
+      isLoading: true,
+      refetch: vi.fn(),
+    });
+
+    render(<Home />);
+
+    expect(screen.getByTestId('loading-kpis')).toBeTruthy();
+    expect(screen.queryByTestId('grid-kpis')).toBeNull();
+  });
+
+  it('permite repetir a consulta quando as métricas falham', async () => {
+    const retry = vi.fn();
+    getDashboardStats.mockReturnValue({
+      data: undefined,
+      isError: true,
+      isFetching: false,
+      isLoading: false,
+      refetch: retry,
+    });
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(screen.getByTestId('state-kpis-erro')).toBeTruthy();
+    await user.click(screen.getByTestId('button-tentar-novamente-kpis'));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

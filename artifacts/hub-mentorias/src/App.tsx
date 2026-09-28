@@ -10,6 +10,8 @@ import NotFound from '@/pages/not-found';
 import {
   CheckCircle2,
   CircleAlert,
+  Layers,
+  Plus,
   Settings2,
   RefreshCw,
   Search,
@@ -18,11 +20,13 @@ import {
 } from 'lucide-react';
 import {
   getGetAccessPermissionsQueryKey,
+  getGetDashboardStatsQueryKey,
   getGetHealthQueryKey,
   getGetTeamsQueryKey,
   getHealthCheckQueryKey,
   useGetHealth,
   useGetAccessPermissions,
+  useGetDashboardStats,
   useGetTeams,
   useHealthCheck,
 } from '@workspace/api-client-react';
@@ -40,12 +44,13 @@ import {
   clerkProxyUrl,
   clerkPubKey,
   ClerkQueryClientCacheInvalidator,
-  LogoutButton,
   PublicHome,
   SignInPage,
   SignUpPage,
   stripBase,
+  UserProfileButton,
 } from './auth';
+import { DashboardKpis } from '@/components/dashboard-kpis';
 
 const queryClient = new QueryClient();
 
@@ -86,6 +91,12 @@ export function Home() {
       staleTime: 30_000,
     },
   });
+  const dashboardStats = useGetDashboardStats({
+    query: {
+      queryKey: getGetDashboardStatsQueryKey(),
+      staleTime: 30_000,
+    },
+  });
 
   const filteredTeams = useMemo(() => {
     const source = teams.data ?? [];
@@ -111,42 +122,62 @@ export function Home() {
     void health.refetch();
     void teams.refetch();
     void access.refetch();
+    void dashboardStats.refetch();
   };
 
   return (
-    <div className="grain min-h-[100dvh] w-full bg-background text-foreground">
-      <header className="border-b border-border/70 bg-card/70">
-        <div className="mx-auto flex max-w-[1080px] flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-8 sm:py-5">
+    <div className="grain min-h-[100dvh] w-full bg-zinc-50 text-zinc-900">
+      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
+        <div className="font-inter mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8 sm:py-4">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Waypoints size={19} />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-white">
+              <Layers size={19} />
             </span>
-            <span className="min-w-0 font-display text-lg leading-tight sm:text-xl">HUB de Mentorias PIBEP PUCPR</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold leading-tight text-zinc-900">Hub de Mentorias</span>
+              <span className="mt-1 block text-xs text-zinc-500">Ciclo Ativo • 8 Equipes</span>
+            </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {!access.isError && access.data?.canManage === true && (
-              <Link href="/manage" className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15" data-testid="link-manter-equipes">
+              <Link href="/manage" className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100" data-testid="link-manter-equipes">
                 <Settings2 size={14} /> <span>Manter equipes</span>
               </Link>
             )}
             <button
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted"
+              className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
               data-testid="button-atualizar"
               onClick={refreshAll}
               type="button"
             >
               <RefreshCw
-                className={health.isFetching || teams.isFetching ? 'animate-spin' : ''}
+                className={health.isFetching || teams.isFetching || dashboardStats.isFetching ? 'animate-spin' : ''}
                 size={14}
               />
               Atualizar
             </button>
-            <LogoutButton />
+            <button
+              aria-label="Novo registro, disponível em uma próxima etapa"
+              className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:cursor-default disabled:opacity-100"
+              data-testid="button-novo-registro"
+              disabled
+              type="button"
+            >
+              <Plus size={14} /> Novo Registro
+            </button>
+            <UserProfileButton />
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1080px] px-5 pb-12 pt-10 sm:px-8">
+        <DashboardKpis
+          data={dashboardStats.data}
+          isError={dashboardStats.isError}
+          isLoading={dashboardStats.isLoading}
+          onRetry={() => void dashboardStats.refetch()}
+        />
+
         <div className="mb-9">
           <div
             className={`mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${

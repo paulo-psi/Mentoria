@@ -53,6 +53,43 @@ export function useClerk() {
   };
 }
 
+export function UserButton() {
+  const { signOut } = useTestAuth();
+  const [, navigate] = useLocation();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label="Perfil do usuário"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-xs font-semibold text-zinc-700"
+        data-testid="clerk-user-button"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        PU
+      </button>
+      {open && (
+        <div className="absolute right-0 top-11 z-50 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg" role="menu">
+          <button
+            className="rounded-md px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100"
+            onClick={() => {
+              signOut();
+              navigate('/');
+            }}
+            role="menuitem"
+            type="button"
+          >
+            Sair
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SignIn() {
   const { signIn } = useTestAuth();
   const [, navigate] = useLocation();

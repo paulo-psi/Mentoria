@@ -1,0 +1,71 @@
+### PRD TÉCNICO - PASSO 2.2: HEADER MINIMALISTA E CARDS DE KPI NO FRONTEND
+
+Atue como Engenheiro de Software Sênior e Especialista em UI/UX. Sua tarefa exclusiva neste passo é construir o Header de navegação e a seção analítica superior (os 4 Cards de KPI) na tela principal do portal, consumindo os dados reais via hook `useGetDashboardStats` gerado pelo Orval.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Implementar a camada visual do topo da aplicação na rota principal (`/`), entregando uma experiência limpa, moderna (estilo shadcn/ui) e sem atrito visual, permitindo ao gestor avaliar a saúde do ciclo em menos de 5 segundos.
+
+---
+
+#### 2. STACK E GOVERNANÇA VISUAL
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`.
+- **Camada de Dados:** Utilize obrigatoriamente o hook `useGetDashboardStats` gerado pelo Orval/React Query. Não crie mocks ou estados manuais com `fetch`.
+- **Design System & Tailwind:**
+  - Paleta neutra: fundo `bg-zinc-50` ou `bg-slate-50`, cards com fundo branco (`bg-white`), bordas suaves `border-zinc-200` e sombras sutis (`shadow-sm` ou `shadow-[0_1px_3px_rgba(0,0,0,0.02)]`).
+  - Tipografia: fonte `Inter`, tamanhos balanceados, espaçamentos consistentes.
+  - Ícones: `lucide-react`.
+
+---
+
+#### 3. COMPONENTES A IMPLEMENTAR
+
+##### A. Header de Navegação (Fixo / Sticky)
+- **Lado Esquerdo:**
+  - Ícone em container neutro escuro (ex.: `Layers` de `lucide-react` em fundo `zinc-900` com cantos `rounded-lg`).
+  - Título do produto: **"Hub de Mentorias"** (`text-sm font-semibold text-zinc-900`).
+  - Subtítulo/Badge: **"Ciclo Ativo • 8 Equipes"** (`text-xs text-zinc-500`).
+- **Lado Direito:**
+  - Botão de destaque **"+ Novo Registro"** estilizado em `bg-zinc-900 text-white text-xs font-medium px-3.5 py-1.5 rounded-md hover:bg-zinc-800 transition-colors shadow-sm` com ícone `Plus`. *(Nota: Apenas visual por enquanto, sem abrir modal)*.
+  - Se houver integração com Clerk na aplicação, mantenha o componente de perfil do usuário (`UserButton`) alinhado à direita.
+
+##### B. Seção de KPIs ("Visão Geral do Ciclo")
+- **Título de Seção:** Texto discreto em caixa alta com tracking suave (`text-xs font-semibold uppercase tracking-wider text-zinc-400`).
+- **Grade Responsiva:** Grid com 1 coluna no mobile, 2 em tablets e 4 colunas em desktop (`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`).
+- **Os 4 Cards Analíticos:**
+  1. **Sessões Realizadas:**
+     - Ícone: `CalendarCheck` ou `CheckCircle2` (`text-zinc-400`).
+     - Valor principal: `totalSessions` em `text-2xl font-bold tracking-tight text-zinc-900`.
+     - Rótulo secundário: "registros no ciclo".
+  2. **NPS das Mentorias:**
+     - Ícone: `Sparkles` (`text-zinc-400`).
+     - Valor principal: `avgNps` formatado com 1 casa decimal (ex.: `9.2`).
+     - Sufixo: `/ 10` em texto discreto.
+  3. **Tração das Equipes:**
+     - Ícone: `TrendingUp` (`text-zinc-400`).
+     - Valor principal: `avgTraction` formatado com 1 casa decimal (ex.: `8.5`).
+     - Sufixo: `/ 10` em texto discreto.
+  4. **Abertura de Rede:**
+     - Ícone: `Share2` (`text-zinc-400`).
+     - Valor principal: `networkOpennessRate` formatado com `%` (ex.: `41.7%`).
+     - Rótulo secundário: "transversais / externas".
+
+##### C. Estados de Interface (UX Rigorosa)
+- **Loading:** Renderize skeletons retangulares suaves (`animate-pulse bg-zinc-100 rounded-xl h-28`) enquanto a query estiver carregando.
+- **Error:** Em caso de falha na API, exiba um banner discreto informando indisponibilidade temporária das métricas, com um botão sutil de "Tentar novamente" (`refetch`).
+
+---
+
+#### 4. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] O comando de verificação estática `pnpm run typecheck` passa sem nenhum erro.
+- [ ] Os testes existentes (`pnpm test`) continuam passando integralmente.
+- [ ] A tela principal renderiza o header e os 4 cards consumindo os dados reais do endpoint `/api/dashboard/stats`.
+- [ ] O layout é responsivo e não quebra em resoluções menores.
+
+---
+
+#### 5. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO implemente a tabela de listagem das 8 equipes (escopo exclusivo do Passo 2.3).
+- NÃO construa o modal/gaveta do formulário de novo registro.
+- NÃO altere rotas, schemas do banco ou contratos OpenAPI existentes.
