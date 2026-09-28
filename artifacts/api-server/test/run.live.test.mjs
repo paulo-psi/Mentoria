@@ -10,7 +10,7 @@ import { runRosterTests } from "./run.mjs";
 
 const { Client: PgClient } = createRequire(new URL("../../../lib/db/package.json", import.meta.url))("pg");
 
-test("the real pg client applies fixtures only to the disposable database despite a conflicting URL option", async () => {
+async function verifyLiveRunnerCleanup(rosterProcessStatus) {
   const probeTable = `fixture_isolation_probe_${randomUUID().replaceAll("-", "")}`;
   assert.ok(
     process.env.DATABASE_URL && process.env.NODE_ENV !== "production" && !process.env.REPLIT_DEPLOYMENT,
@@ -80,13 +80,13 @@ test("the real pg client applies fixtures only to the disposable database despit
         }
         assert.equal(command, process.execPath);
         testProcessStarted = true;
-        return { status: 0 };
+        return { status: rosterProcessStatus };
       },
       bundle: async () => {},
       tempDirectory: tmpdir(),
     });
 
-    assert.equal(result, 0);
+    assert.equal(result, rosterProcessStatus, "the roster subprocess exit status remains visible to the caller");
     assert.match(createdDatabase, /^roster_test_[a-f0-9]{32}$/);
     assert.equal(fixtureDatabase, createdDatabase, "pg connected to the generated database, not the query option");
     assert.equal(fixtureTableCreated, true, "fixture SQL ran in the generated database");
@@ -96,13 +96,18 @@ test("the real pg client applies fixtures only to the disposable database despit
     );
     assert.equal(sourceProbe.table_name, null, "fixture SQL did not create a table in the source database");
     assert.equal(testProcessStarted, true);
+    const { rows: [sourceDatabase] } = await verifier.query(
+      "select count(*)::integer as count from pg_database where datname = $1",
+      [source.name],
+    );
+    assert.equal(sourceDatabase.count, 1, "cleanup did not drop the source database");
     const { rows: [remaining] } = await verifier.query(
       "select count(*)::integer as count from pg_database where datname = $1",
       [createdDatabase],
     );
-    assert.equal(remaining.count, 0, "the disposable database was dropped");
+    assert.equal(remaining.count, 0, "the disposable database was dropped after the roster run");
     assert.equal(tempDirectories.length, 1);
-    await assert.rejects(access(tempDirectories[0]), { code: "ENOENT" });
+    await assert.rejects(access(tempDirectories[0]), { code: "ENOENT" }, "the temporary schema directory was removed");
   } finally {
     // If the runner regresses, the integration test must not leave a database behind.
     if (createdDatabase) {
@@ -123,4 +128,12 @@ test("the real pg client applies fixtures only to the disposable database despit
     }
     await verifier.end();
   }
+}
+
+test("the real pg client applies fixtures only to the disposable database and cleans up after success", async () => {
+  await verifyLiveRunnerCleanup(0);
+});
+
+test("the real runner reports a failed roster process and cleans up only its disposable database", async () => {
+  await verifyLiveRunnerCleanup(23);
 });
