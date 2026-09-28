@@ -1044,13 +1044,17 @@ test("a student addition concurrent with startup seed is serialized and preserve
     const [_, response] = await Promise.all([seedRun, additionRun]);
     assert.equal(response.status, 201);
     const addedStudent = response.body as {
-      id: number; teamId: number; name: string; sortOrder: number;
+      id: number; name: string; sortOrder: number;
     };
-    assert.equal(addedStudent.teamId, team.id);
     assert.equal(addedStudent.name, addedName);
     assert.equal(addedStudent.sortOrder, nextSortOrder);
 
     const after = await rosterSnapshot();
+    const insertedRow = after.students.find(({ id }) => id === addedStudent.id);
+    assert.ok(insertedRow, "the administrator's student must be saved");
+    assert.equal(insertedRow.teamId, team.id);
+    assert.equal(insertedRow.name, addedName);
+    assert.equal(insertedRow.sortOrder, nextSortOrder);
     assert.deepEqual(after.mentors, before.mentors, "startup must not change mentors");
     assert.deepEqual(after.teams, before.teams, "startup must not change teams");
     assert.deepEqual(after.sessions, before.sessions, "startup must not change sessions");
