@@ -697,6 +697,63 @@ test("a newly recorded official session survives startup seeding", async () => {
   }
 });
 
+test("an official transversal session with another mentor survives startup seeding", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the transversal session must use the disposable test database");
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    const teamEntry = officialTeams[0];
+    const transversalMentorEntry = officialTeams.find(({ mentor }) => mentor !== teamEntry.mentor);
+    assert.ok(transversalMentorEntry);
+    const team = official.teams.find(({ name }) => name === teamEntry.name);
+    const mainMentor = official.mentors.find(({ name }) => name === teamEntry.mentor);
+    const transversalMentor = official.mentors.find(({ name }) => name === transversalMentorEntry.mentor);
+    assert.ok(team);
+    assert.ok(mainMentor);
+    assert.ok(transversalMentor);
+    assert.equal(team.mainMentorId, mainMentor.id);
+    assert.notEqual(transversalMentor.id, team.mainMentorId);
+
+    const [session] = await db.insert(mentoringSessionsTable).values({
+      teamId: team.id,
+      mentorId: transversalMentor.id,
+      sessionType: "transversal",
+      sessionDate: "2026-03-02",
+      teamNps: 8,
+      teamActionability: 9,
+      mentorCommitment: 8,
+      mentorTraction: 9,
+      teamFeedbackStrongPoints: "A equipe colaborou bem com outro mentor.",
+      teamFeedbackImprovements: "Aprofundar os critérios de validação.",
+      agreedNextSteps: "Comparar os resultados do próximo teste.",
+      mentorQualitativeAssessment: "A conversa trouxe uma perspectiva complementar.",
+    }).returning();
+    assert.equal(session.sessionType, "transversal");
+    assert.equal(session.mentorId, transversalMentor.id);
+    assert.notEqual(session.mentorId, team.mainMentorId);
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, [session], "the cross-team session must exist before startup");
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "startup must preserve the official roster and the transversal session's mentor/team links",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
 test("a failed official roster insert rolls back the complete legacy replacement", async () => {
   await clearRosterTables();
   let triggerCreated = false;
