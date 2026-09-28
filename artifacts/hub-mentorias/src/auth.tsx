@@ -3,7 +3,7 @@ import { SignIn, SignUp, UserButton, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, LockKeyhole, Waypoints } from 'lucide-react';
+import { ArrowRight, LockKeyhole, LogOut, Waypoints } from 'lucide-react';
 import { Link } from 'wouter';
 
 export const clerkPubKey = publishableKeyFromHost(
@@ -145,6 +145,19 @@ export function PublicHome() {
 
 export function UserProfileButton() {
   return <UserButton />;
+}
+
+export function LogoutButton() {
+  const { signOut } = useClerk();
+  return (
+    <button
+      className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold transition-colors hover:bg-muted"
+      onClick={() => signOut({ redirectUrl: basePath || '/' })}
+      type="button"
+    >
+      <LogOut size={14} /> Sair
+    </button>
+  );
 }
 
 export function ClerkQueryClientCacheInvalidator() {

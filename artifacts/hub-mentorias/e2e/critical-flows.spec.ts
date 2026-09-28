@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Student, Team } from '@workspace/api-client-react';
+import type { DashboardStats, Student, Team } from '@workspace/api-client-react';
 
 async function mockRosterApi(page: Page, canManage = true, { accessFails = false }: { accessFails?: boolean } = {}) {
   const team: Team = {
@@ -23,6 +23,12 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
   const renameRequests: Array<{ name: string; expectedName: string }> = [];
   const mutationRequests: string[] = [];
   const unexpectedRequests: string[] = [];
+  const dashboardStats: DashboardStats = {
+    totalSessions: 18,
+    avgNps: 8.6,
+    avgTraction: 8.5,
+    networkOpennessRate: 41.7,
+  };
 
   await page.route('**/api/**', async (route) => {
     const { pathname } = new URL(route.request().url());
@@ -41,6 +47,7 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     }
     else if (method === 'GET' && pathname === '/api/healthz') data = { status: 'ok' };
     else if (method === 'GET' && pathname === '/api/health') data = { status: 'ok', database: 'connected' };
+    else if (method === 'GET' && pathname === '/api/dashboard/stats') data = dashboardStats;
     else if (method === 'GET' && pathname === '/api/teams') data = [team];
     else if (method === 'GET' && pathname === '/api/mentors') data = [
       { id: 1, name: 'Mentora de Teste' },
