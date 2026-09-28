@@ -505,6 +505,102 @@ test("concurrent startup seeds serialize across separate database connections", 
   }
 });
 
+test("concurrent startup replaces the legacy demo once across separate database connections", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "concurrent legacy migration must use run.mjs's disposable database");
+  await clearRosterTables();
+
+  let releaseBlocker!: () => void;
+  let signalLockAcquired!: () => void;
+  const blockerRelease = new Promise<void>((resolve) => { releaseBlocker = resolve; });
+  const lockAcquired = new Promise<void>((resolve) => { signalLockAcquired = resolve; });
+  const blocker = db.transaction(async (tx) => {
+    await tx.execute(rosterWriteLock);
+    signalLockAcquired();
+    await blockerRelease;
+  });
+  const seedRuns: Promise<void>[] = [];
+
+  try {
+    const legacy = await insertLegacyDemo();
+    assert.equal(legacy.mentors.length, legacyDemoMentors.length);
+    assert.equal(legacy.teams.length, legacyDemoTeams.length);
+    assert.equal(legacy.students.length, 0);
+    assert.equal(legacy.sessions.length, legacyDemoTeams.length * 3);
+    await lockAcquired;
+
+    let settledSeeds = 0;
+    seedRuns.push(seedDatabase().finally(() => { settledSeeds += 1; }));
+    seedRuns.push(seedDatabase().finally(() => { settledSeeds += 1; }));
+
+    const deadline = Date.now() + 5_000;
+    let waitingBackendPids: number[] = [];
+    while (Date.now() < deadline) {
+      const { rows } = await pool.query<{ pid: number }>(`
+        SELECT pid::int AS pid
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND NOT granted
+          AND classid = 0
+          AND objid = 732941
+          AND objsubid = 1
+        ORDER BY pid
+      `);
+      waitingBackendPids = rows.map(({ pid }) => pid);
+      if (waitingBackendPids.length === 2) break;
+      assert.equal(settledSeeds, 0, "both legacy migrations must wait for the shared roster lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(waitingBackendPids.length, 2, "both legacy seed transactions must wait for the shared roster lock");
+    assert.equal(
+      new Set(waitingBackendPids).size,
+      2,
+      "the concurrent legacy seed transactions must use separate PostgreSQL connections",
+    );
+
+    releaseBlocker();
+    await Promise.all(seedRuns);
+
+    const official = await rosterSnapshot();
+    const mentorNameById = new Map(official.mentors.map(({ id, name }) => [id, name]));
+    assert.deepEqual(
+      official.mentors.map(({ name }) => name).sort(),
+      officialTeams.map(({ mentor }) => mentor).sort(),
+      "the legacy mentors must be replaced by exactly the official mentor set",
+    );
+    assert.equal(official.teams.length, officialTeams.length, "there must be exactly one official team per entry");
+    assert.equal(
+      official.students.length,
+      officialTeams.reduce((count, team) => count + team.students.length, 0),
+      "there must be exactly the official students, without duplicates",
+    );
+    assert.deepEqual(
+      official.teams.map((team) => ({
+        name: team.name,
+        mentor: mentorNameById.get(team.mainMentorId),
+        students: official.students
+          .filter(({ teamId }) => teamId === team.id)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(({ name, sortOrder }) => ({ name, sortOrder })),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
+      officialTeams.map(({ name, mentor, students }) => ({
+        name,
+        mentor,
+        students: students.map((studentName, sortOrder) => ({ name: studentName, sortOrder })),
+      })).sort((a, b) => a.name.localeCompare(b.name)),
+      "the concurrent legacy migration must leave exact official relationships and ordering",
+    );
+    assert.deepEqual(official.sessions, [], "the legacy sessions must be removed without concurrent errors");
+  } finally {
+    releaseBlocker();
+    await blocker;
+    await Promise.allSettled(seedRuns);
+    await clearRosterTables();
+  }
+});
+
 test("a student edit concurrent with startup seed is serialized and preserved", async () => {
   await clearRosterTables();
   await seedDatabase();
