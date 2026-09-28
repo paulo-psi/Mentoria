@@ -129,7 +129,7 @@ function createHarness(mode) {
       )) {
         throw new Error("simulated administrative connection close failure");
       }
-      if (!this.isAdmin && mode === "fixture-connect-and-end") {
+      if (!this.isAdmin && (mode === "fixture-connect-and-end" || mode === "fixture-end")) {
         throw new Error("simulated fixture connection close failure");
       }
     }
@@ -316,6 +316,23 @@ test("fixture setup and close failures are both reported before administrative c
   assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
   assert.equal(harness.state.fixtureEnded, true, "fixture close was attempted");
   assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+  assert.equal(harness.state.terminateConnectionAttempts, 1);
+  assert.equal(harness.state.dropDatabaseAttempts, 1);
+  assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
+  await assertResourcesRemoved(harness.state);
+});
+
+test("fixture close failure after successful SQL application stops roster tests and cleans up", async () => {
+  const harness = createHarness("fixture-end");
+
+  await assert.rejects(runWith(harness), /simulated fixture connection close failure/);
+
+  assert.equal(harness.state.fixtureConnectAttempts, 1);
+  assert.deepEqual(harness.state.fixtureQueries, ["CREATE TABLE disposable_fixture (id integer);"], "fixture SQL was applied");
+  assert.equal(harness.state.fixtureEnded, true, "fixture close was attempted");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+  assert.equal(harness.state.runTestProcess, false);
   assert.equal(harness.state.terminateConnectionAttempts, 1);
   assert.equal(harness.state.dropDatabaseAttempts, 1);
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1);
