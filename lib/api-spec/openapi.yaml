@@ -270,6 +270,49 @@ paths:
         "404":
           description: Team not found
   /teams/{teamId}/sessions:
+    get:
+      operationId: getTeamSessions
+      tags: [teams]
+      summary: Retrieve the complete session history for a team
+      description: Returns every session in reverse chronological order, including the conducting mentor, all scores, and complete qualitative notes.
+      parameters:
+        - name: teamId
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Complete session history, newest session first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamSessionHistoryItem"
+        "400":
+          description: Invalid team identifier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Approved user access required
+        "404":
+          description: Team not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       operationId: createMentoringSession
       tags: [teams]
@@ -664,6 +707,83 @@ components:
         - agreedNextSteps
         - mentorQualitativeAssessment
         - createdAt
+    TeamSessionHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionDate:
+          type: string
+          format: date
+        sessionType:
+          type: string
+          enum: [principal, transversal, externo]
+        mentor:
+          $ref: "#/components/schemas/TeamSessionMentor"
+        scores:
+          $ref: "#/components/schemas/TeamSessionScores"
+        qualitative:
+          $ref: "#/components/schemas/TeamSessionQualitative"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - sessionDate
+        - sessionType
+        - mentor
+        - scores
+        - qualitative
+        - createdAt
+    TeamSessionMentor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        expertiseArea:
+          type: ["string", "null"]
+        mentorType:
+          type: ["string", "null"]
+          enum: [interno, externo, null]
+      required: [id, name, expertiseArea, mentorType]
+    TeamSessionScores:
+      type: object
+      properties:
+        teamNps:
+          type: integer
+          minimum: 0
+          maximum: 10
+        teamActionability:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorCommitment:
+          type: integer
+          minimum: 0
+          maximum: 10
+        mentorTraction:
+          type: integer
+          minimum: 0
+          maximum: 10
+      required: [teamNps, teamActionability, mentorCommitment, mentorTraction]
+    TeamSessionQualitative:
+      type: object
+      properties:
+        teamFeedbackStrongPoints:
+          type: string
+        teamFeedbackImprovements:
+          type: string
+        agreedNextSteps:
+          type: string
+        mentorQualitativeAssessment:
+          type: string
+      required:
+        - teamFeedbackStrongPoints
+        - teamFeedbackImprovements
+        - agreedNextSteps
+        - mentorQualitativeAssessment
     MentoringSessionInput:
       type: object
       properties:

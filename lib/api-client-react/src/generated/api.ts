@@ -37,6 +37,7 @@ import type {
   Team,
   TeamDeleteInput,
   TeamInput,
+  TeamSessionHistoryItem,
   TeamUpdateInput
 } from './api.schemas';
 
@@ -817,6 +818,84 @@ export const useCreateStudent = <TError = ErrorType<ErrorResponse | void>,
       > => {
       return useMutation(getCreateStudentMutationOptions(options));
     }
+
+export const getGetTeamSessionsUrl = (teamId: number,) => {
+
+
+
+
+  return `/api/teams/${teamId}/sessions`
+}
+
+/**
+ * Returns every session in reverse chronological order, including the conducting mentor, all scores, and complete qualitative notes.
+ * @summary Retrieve the complete session history for a team
+ */
+export const getTeamSessions = async (teamId: number, options?: Parameters<typeof customFetch>[1]): Promise<TeamSessionHistoryItem[]> => {
+
+  return customFetch<TeamSessionHistoryItem[]>(getGetTeamSessionsUrl(teamId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetTeamSessionsQueryKey = (teamId: number,) => {
+    return [
+    `/api/teams/${teamId}/sessions`
+    ] as const;
+    }
+
+
+export const getGetTeamSessionsQueryOptions = <TData = Awaited<ReturnType<typeof getTeamSessions>>, TError = ErrorType<ErrorResponse | void>>(teamId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTeamSessionsQueryKey(teamId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTeamSessions>>> = ({ signal }) => getTeamSessions(teamId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: teamId !== null && teamId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTeamSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetTeamSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof getTeamSessions>>>
+export type GetTeamSessionsQueryError = ErrorType<ErrorResponse | void>
+
+
+/**
+ * @summary Retrieve the complete session history for a team
+ */
+
+export function useGetTeamSessions<TData = Awaited<ReturnType<typeof getTeamSessions>>, TError = ErrorType<ErrorResponse | void>>(
+ teamId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getTeamSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetTeamSessionsQueryOptions(teamId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateMentoringSessionUrl = (teamId: number,) => {
 

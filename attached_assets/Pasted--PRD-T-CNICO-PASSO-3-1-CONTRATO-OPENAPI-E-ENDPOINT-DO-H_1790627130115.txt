@@ -1,0 +1,55 @@
+### PRD TÉCNICO - PASSO 3.1: CONTRATO OPENAPI E ENDPOINT DO HISTÓRICO COMPLETO DA EQUIPE
+
+Atue como Engenheiro de Software Sênior. Sua tarefa exclusiva neste passo é atualizar a especificação OpenAPI, regenerar os tipos/hooks com Orval e implementar o endpoint de recuperação de todo o histórico cronológico de sessões de uma equipe específica, preservando integralmente os textos qualitativos.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Disponibilizar uma rota protegida `GET /api/teams/{id}/sessions` que retorne todas as mentorias realizadas por uma equipe específica, ordenadas da mais recente para a mais antiga, contendo os dados do mentor condutor, as 4 notas (0 a 10) e os 4 pareceres textuais completos (sem cortes ou resumos).
+
+---
+
+#### 2. STACK E GOVERNANÇA TÉCNICA OBRIGATÓRIA
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`. Proibido `npm` ou `yarn`.
+- **Fluxo OpenAPI-First:**
+  1. Atualize primeiramente o arquivo de especificação OpenAPI (`.yaml`).
+  2. Execute o script de geração de código (`pnpm run codegen`) para que o Orval gere os schemas Zod e o hook correspondente (ex.: `useGetTeamSessions`).
+  3. Implemente a rota e controller no Express consumindo Drizzle ORM e os tipos gerados.
+- **Segurança:** A rota deve manter as proteções de autenticação existentes para usuários aprovados.
+
+---
+
+#### 3. ESPECIFICAÇÃO DO CONTRATO E RETORNO
+
+1. **Rota:** `GET /api/teams/{id}/sessions`
+   - Parâmetro de caminho: `id` (inteiro, identificador da equipe).
+2. **Respostas HTTP:**
+   - `200 OK`: Retorna array com todas as sessões da equipe.
+   - `404 Not Found`: Retorna erro caso o `id` da equipe não exista no banco.
+   - `503 Service Unavailable`: Falha de banco de dados.
+3. **Payload de cada item do array de Sessão (JSON Schema):**
+   ```json
+   {
+     "id": 1,
+     "sessionDate": "2026-03-24",
+     "sessionType": "principal",
+     "mentor": {
+       "id": 2,
+       "name": "Dra. Helena Ramos",
+       "expertiseArea": "Saúde & Produto",
+       "mentorType": "interno"
+     },
+     "scores": {
+       "teamNps": 10,
+       "teamActionability": 9,
+       "mentorCommitment": 8,
+       "mentorTraction": 9
+     },
+     "qualitative": {
+       "teamFeedbackStrongPoints": "Texto integral dos pontos fortes destacados pela equipe...",
+       "teamFeedbackImprovements": "Texto integral das melhorias sugeridas...",
+       "agreedNextSteps": "Texto integral dos combinados e tarefas para a próxima semana...",
+       "mentorQualitativeAssessment": "Texto integral da percepção técnica e comportamental do mentor sobre a equipe..."
+     },
+     "createdAt": "2026-03-24T18:00:00.000Z"
+   }

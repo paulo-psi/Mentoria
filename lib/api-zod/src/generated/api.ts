@@ -305,6 +305,58 @@ export const CreateStudentResponse = zod.object({
 
 
 /**
+ * Returns every session in reverse chronological order, including the conducting mentor, all scores, and complete qualitative notes.
+ * @summary Retrieve the complete session history for a team
+ */
+
+
+
+export const GetTeamSessionsParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1)
+})
+
+export const getTeamSessionsResponseScoresTeamNpsMin = 0;
+export const getTeamSessionsResponseScoresTeamNpsMax = 10;
+
+export const getTeamSessionsResponseScoresTeamActionabilityMin = 0;
+export const getTeamSessionsResponseScoresTeamActionabilityMax = 10;
+
+export const getTeamSessionsResponseScoresMentorCommitmentMin = 0;
+export const getTeamSessionsResponseScoresMentorCommitmentMax = 10;
+
+export const getTeamSessionsResponseScoresMentorTractionMin = 0;
+export const getTeamSessionsResponseScoresMentorTractionMax = 10;
+
+
+
+export const GetTeamSessionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "sessionDate": zod.coerce.date(),
+  "sessionType": zod.enum(['principal', 'transversal', 'externo']),
+  "mentor": zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable()
+}),
+  "scores": zod.object({
+  "teamNps": zod.number().int().min(getTeamSessionsResponseScoresTeamNpsMin).max(getTeamSessionsResponseScoresTeamNpsMax),
+  "teamActionability": zod.number().int().min(getTeamSessionsResponseScoresTeamActionabilityMin).max(getTeamSessionsResponseScoresTeamActionabilityMax),
+  "mentorCommitment": zod.number().int().min(getTeamSessionsResponseScoresMentorCommitmentMin).max(getTeamSessionsResponseScoresMentorCommitmentMax),
+  "mentorTraction": zod.number().int().min(getTeamSessionsResponseScoresMentorTractionMin).max(getTeamSessionsResponseScoresMentorTractionMax)
+}),
+  "qualitative": zod.object({
+  "teamFeedbackStrongPoints": zod.string(),
+  "teamFeedbackImprovements": zod.string(),
+  "agreedNextSteps": zod.string(),
+  "mentorQualitativeAssessment": zod.string()
+}),
+  "createdAt": zod.coerce.date()
+})
+export const GetTeamSessionsResponse = zod.array(GetTeamSessionsResponseItem)
+
+
+/**
  * @summary Record a mentoring session for a team
  */
 

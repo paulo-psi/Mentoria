@@ -202,6 +202,75 @@ export interface MentoringSession {
   createdAt: string;
 }
 
+export type TeamSessionHistoryItemSessionType = typeof TeamSessionHistoryItemSessionType[keyof typeof TeamSessionHistoryItemSessionType];
+
+
+export const TeamSessionHistoryItemSessionType = {
+  principal: 'principal',
+  transversal: 'transversal',
+  externo: 'externo',
+} as const;
+
+/**
+ * @nullable
+ */
+export type TeamSessionMentorMentorType = typeof TeamSessionMentorMentorType[keyof typeof TeamSessionMentorMentorType] | null;
+
+
+export const TeamSessionMentorMentorType = {
+  interno: 'interno',
+  externo: 'externo',
+} as const;
+
+export interface TeamSessionMentor {
+  id: number;
+  name: string;
+  /** @nullable */
+  expertiseArea: string | null;
+  /** @nullable */
+  mentorType: TeamSessionMentorMentorType;
+}
+
+export interface TeamSessionScores {
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamNps: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamActionability: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorCommitment: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorTraction: number;
+}
+
+export interface TeamSessionQualitative {
+  teamFeedbackStrongPoints: string;
+  teamFeedbackImprovements: string;
+  agreedNextSteps: string;
+  mentorQualitativeAssessment: string;
+}
+
+export interface TeamSessionHistoryItem {
+  id: number;
+  sessionDate: string;
+  sessionType: TeamSessionHistoryItemSessionType;
+  mentor: TeamSessionMentor;
+  scores: TeamSessionScores;
+  qualitative: TeamSessionQualitative;
+  createdAt: string;
+}
+
 export type MentoringSessionInputSessionType = typeof MentoringSessionInputSessionType[keyof typeof MentoringSessionInputSessionType];
 
 
