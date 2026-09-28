@@ -542,6 +542,66 @@ test("a failed official roster insert rolls back the complete legacy replacement
   }
 });
 
+test("a failed first official roster import leaves every roster table empty", async () => {
+  await clearRosterTables();
+  let triggerCreated = false;
+  let functionCreated = false;
+  try {
+    const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+      "SELECT current_database() AS name",
+    );
+    assert.match(databaseName, /^roster_test_/, "first-import failure must use run.mjs's disposable database");
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed, { mentors: [], teams: [], students: [], sessions: [] });
+
+    await pool.query(`
+      CREATE FUNCTION roster_test_fail_first_official_student_insert()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF NEW.sort_order = 1 THEN
+          RAISE EXCEPTION 'simulated first official roster insert failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    functionCreated = true;
+    await pool.query(`
+      CREATE TRIGGER roster_test_fail_first_official_student_insert
+      BEFORE INSERT ON students
+      FOR EACH ROW
+      EXECUTE FUNCTION roster_test_fail_first_official_student_insert()
+    `);
+    triggerCreated = true;
+
+    await assert.rejects(seedDatabase(), (error: unknown) => {
+      let cause = error;
+      while (cause instanceof Error) {
+        if (cause.message.includes("simulated first official roster insert failure")) return true;
+        cause = cause.cause;
+      }
+      return false;
+    });
+
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "a failed first import must roll back all mentors, teams, students, and sessions",
+    );
+  } finally {
+    if (triggerCreated) {
+      await pool.query("DROP TRIGGER roster_test_fail_first_official_student_insert ON students");
+    }
+    if (functionCreated) {
+      await pool.query("DROP FUNCTION roster_test_fail_first_official_student_insert()");
+    }
+    await clearRosterTables();
+  }
+});
+
 test("official document, seed and API agree on every mentor, team, student and order", async () => {
   const expected = await officialRoster();
   assert.deepEqual(officialTeams.map(({ name, mentor, students }) => ({
