@@ -52,6 +52,27 @@ function runEligibility(checkout, commit) {
   });
 }
 
+function runEligibilityBeforeRelease(checkout, commit, releaseMarker) {
+  return spawnSync(
+    "bash",
+    [
+      "-e",
+      "-c",
+      'bash "$ELIGIBILITY_SCRIPT"\n: > "$RELEASE_MARKER"',
+    ],
+    {
+      cwd: checkout,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_SHA: commit,
+        ELIGIBILITY_SCRIPT: eligibilityScript,
+        RELEASE_MARKER: releaseMarker,
+      },
+    },
+  );
+}
+
 test("accepts a tagged commit that is reachable from main", async (t) => {
   const repository = await createRepository(t);
   const result = runEligibility(repository.checkout, repository.mainCommit);
@@ -62,27 +83,28 @@ test("accepts a tagged commit that is reachable from main", async (t) => {
 test("rejects an unmerged tagged commit before the release command can run", async (t) => {
   const repository = await createRepository(t);
   const releaseMarker = path.join(repository.directory, "release-command-ran");
-  const result = spawnSync(
-    "bash",
-    [
-      "-e",
-      "-c",
-      'bash "$ELIGIBILITY_SCRIPT"\n: > "$RELEASE_MARKER"',
-    ],
-    {
-      cwd: repository.checkout,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GITHUB_SHA: repository.unmergedCommit,
-        ELIGIBILITY_SCRIPT: eligibilityScript,
-        RELEASE_MARKER: releaseMarker,
-      },
-    },
+  const result = runEligibilityBeforeRelease(
+    repository.checkout,
+    repository.unmergedCommit,
+    releaseMarker,
   );
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /not reachable from main/);
+  await assert.rejects(readFile(releaseMarker), { code: "ENOENT" });
+});
+
+test("rejects a tag before release when origin/main cannot be fetched, even with a cached main", async (t) => {
+  const repository = await createRepository(t);
+  git(repository.checkout, "update-ref", "refs/remotes/origin/main", repository.mainCommit);
+  assert.equal(git(repository.checkout, "rev-parse", "refs/remotes/origin/main"), repository.mainCommit);
+  git(repository.checkout, "remote", "set-url", "origin", path.join(repository.directory, "missing-origin.git"));
+  const releaseMarker = path.join(repository.directory, "release-command-ran");
+
+  const result = runEligibilityBeforeRelease(repository.checkout, repository.mainCommit, releaseMarker);
+
+  assert.notEqual(result.status, 0, "a failed fetch must stop the release gate");
+  assert.match(result.stderr, /does not appear to be a git repository|Could not read from remote repository/);
   await assert.rejects(readFile(releaseMarker), { code: "ENOENT" });
 });
 
