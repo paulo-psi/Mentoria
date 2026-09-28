@@ -787,6 +787,48 @@ test("a corrected official session rating survives startup seeding", async () =>
   }
 });
 
+test("a deleted official session stays deleted after startup seeding", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the deleted session must use the disposable test database");
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    const deletedSession = await insertOfficialPrincipalSession(official, "2026-03-07");
+    const retainedSession = await insertOfficialPrincipalSession(official, "2026-03-14");
+    assert.notEqual(deletedSession.id, retainedSession.id);
+
+    const deleted = await db.delete(mentoringSessionsTable)
+      .where(eq(mentoringSessionsTable.id, deletedSession.id))
+      .returning();
+    assert.deepEqual(deleted, [deletedSession], "exactly the selected session must be deleted");
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, [retainedSession]);
+    await seedDatabase();
+    const afterSeed = await rosterSnapshot();
+    assert.deepEqual(
+      afterSeed,
+      beforeSeed,
+      "startup must preserve the roster and remaining sessions without restoring the deletion",
+    );
+    assert.equal(
+      afterSeed.sessions.some(({ id }) => id === deletedSession.id),
+      false,
+      "the deleted session must remain absent",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
 test("an official transversal session with another mentor survives startup seeding", async () => {
   const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
