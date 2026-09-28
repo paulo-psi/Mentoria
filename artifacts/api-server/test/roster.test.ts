@@ -980,6 +980,106 @@ test("a student edit concurrent with startup seed is serialized and preserved", 
   }
 });
 
+test("a student addition concurrent with startup seed is serialized and preserved", async () => {
+  await clearRosterTables();
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "concurrent student addition must use the disposable test database");
+  await seedDatabase();
+  await start({ seed: false });
+
+  let releaseBlocker!: () => void;
+  let signalLockAcquired!: () => void;
+  const blockerRelease = new Promise<void>((resolve) => { releaseBlocker = resolve; });
+  const lockAcquired = new Promise<void>((resolve) => { signalLockAcquired = resolve; });
+  const blocker = db.transaction(async (tx) => {
+    await tx.execute(rosterWriteLock);
+    signalLockAcquired();
+    await blockerRelease;
+  });
+
+  let seedRun: Promise<void> | undefined;
+  let additionRun: Promise<{ status: number; body: unknown }> | undefined;
+  try {
+    await lockAcquired;
+    const before = await rosterSnapshot();
+    const team = (await teams())[0];
+    assert.ok(team, "the initial official seed must include a team");
+    const teamStudents = before.students.filter(({ teamId }) => teamId === team.id);
+    const nextSortOrder = Math.max(-1, ...teamStudents.map(({ sortOrder }) => sortOrder)) + 1;
+    const addedName = "Estudante incluído durante a inicialização";
+
+    let seedSettled = false;
+    let additionSettled = false;
+    seedRun = seedDatabase().finally(() => { seedSettled = true; });
+    additionRun = request(
+      "POST",
+      `/teams/${team.id}/students`,
+      { name: addedName },
+      "admin",
+    ).finally(() => { additionSettled = true; });
+
+    const deadline = Date.now() + 5_000;
+    let waitingOperations = 0;
+    while (Date.now() < deadline) {
+      const { rows: [{ count }] } = await pool.query<{ count: number }>(`
+        SELECT count(*)::int AS count
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND NOT granted
+          AND classid = 0
+          AND objid = 732941
+          AND objsubid = 1
+      `);
+      waitingOperations = count;
+      if (waitingOperations === 2) break;
+      assert.equal(seedSettled, false, "startup seed must wait for the shared roster lock");
+      assert.equal(additionSettled, false, "student addition must wait for the shared roster lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(waitingOperations, 2, "both concurrent operations must wait on the roster lock");
+
+    releaseBlocker();
+    const [_, response] = await Promise.all([seedRun, additionRun]);
+    assert.equal(response.status, 201);
+    const addedStudent = response.body as {
+      id: number; teamId: number; name: string; sortOrder: number;
+    };
+    assert.equal(addedStudent.teamId, team.id);
+    assert.equal(addedStudent.name, addedName);
+    assert.equal(addedStudent.sortOrder, nextSortOrder);
+
+    const after = await rosterSnapshot();
+    assert.deepEqual(after.mentors, before.mentors, "startup must not change mentors");
+    assert.deepEqual(after.teams, before.teams, "startup must not change teams");
+    assert.deepEqual(after.sessions, before.sessions, "startup must not change sessions");
+    assert.deepEqual(
+      after.students.filter(({ id }) => id !== addedStudent.id),
+      before.students,
+      "the only new student row must be the administrator's addition",
+    );
+    assert.equal(after.students.length, before.students.length + 1);
+    assert.equal(after.mentors.length, before.mentors.length);
+    assert.equal(after.teams.length, before.teams.length);
+    assert.equal(after.sessions.length, before.sessions.length);
+    assert.equal(
+      after.students.filter(({ name }) => name === addedName).length,
+      1,
+      "the newly added student must appear exactly once",
+    );
+  } finally {
+    releaseBlocker();
+    await blocker;
+    const pendingOperations: Promise<unknown>[] = [];
+    if (seedRun) pendingOperations.push(seedRun);
+    if (additionRun) pendingOperations.push(additionRun);
+    await Promise.allSettled(pendingOperations);
+    await stop();
+    await clearRosterTables();
+  }
+});
+
 test("a team edit concurrent with startup seed is serialized and preserved", async () => {
   await clearRosterTables();
   await seedDatabase();
