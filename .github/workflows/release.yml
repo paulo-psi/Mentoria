@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  live-database-isolation:
+    name: Live database isolation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: roster_ci
+          POSTGRES_PASSWORD: roster_ci_local_only
+          POSTGRES_DB: roster_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U roster_ci -d roster_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://roster_ci:roster_ci_local_only@127.0.0.1:5432/roster_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Verify disposable connection and run live isolation check
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            const { DATABASE_URL, NODE_ENV, REPLIT_DEPLOYMENT } = process.env;
+            if (!DATABASE_URL || NODE_ENV === "production" || REPLIT_DEPLOYMENT) {
+              throw new Error("Live check requires a non-production database outside a deployment.");
+            }
+            const url = new URL(DATABASE_URL);
+            if (url.protocol !== "postgresql:" || url.hostname !== "127.0.0.1" ||
+                url.port !== "5432" || url.pathname !== "/roster_ci" ||
+                url.username !== "roster_ci" || url.search || url.hash) {
+              throw new Error("Live check must use the disposable local PostgreSQL service.");
+            }
+          '
+          pnpm --filter @workspace/api-server run test:roster-runner:live
+
+  release:
+    name: Publish GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [live-database-isolation]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish only after live isolation succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
