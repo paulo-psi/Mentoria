@@ -136,6 +136,104 @@ export interface TeamUpdateInput {
   expectedMainMentorId: number;
 }
 
+export type MentoringSessionSessionType = typeof MentoringSessionSessionType[keyof typeof MentoringSessionSessionType];
+
+
+export const MentoringSessionSessionType = {
+  principal: 'principal',
+  transversal: 'transversal',
+  externo: 'externo',
+} as const;
+
+export interface MentoringSession {
+  id: number;
+  teamId: number;
+  mentorId: number;
+  sessionType: MentoringSessionSessionType;
+  sessionDate: string;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamNps: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamActionability: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorCommitment: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorTraction: number;
+  teamFeedbackStrongPoints: string;
+  teamFeedbackImprovements: string;
+  agreedNextSteps: string;
+  mentorQualitativeAssessment: string;
+  createdAt: string;
+}
+
+export type MentoringSessionInputSessionType = typeof MentoringSessionInputSessionType[keyof typeof MentoringSessionInputSessionType];
+
+
+export const MentoringSessionInputSessionType = {
+  principal: 'principal',
+  transversal: 'transversal',
+  externo: 'externo',
+} as const;
+
+export interface MentoringSessionInput {
+  /** @minimum 1 */
+  mentorId: number;
+  sessionType: MentoringSessionInputSessionType;
+  sessionDate: string;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamNps: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  teamActionability: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorCommitment: number;
+  /**
+     * @minimum 0
+     * @maximum 10
+     */
+  mentorTraction: number;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  teamFeedbackStrongPoints: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  teamFeedbackImprovements: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  agreedNextSteps: string;
+  /**
+     * @minLength 1
+     * @maxLength 5000
+     */
+  mentorQualitativeAssessment: string;
+}
+
 export interface StudentSnapshot {
   /** @minimum 1 */
   id: number;

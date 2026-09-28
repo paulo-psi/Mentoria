@@ -22,6 +22,7 @@ import type { MentorOption, Student, Team, TeamDeleteInput } from '@workspace/ap
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { LogoutButton } from '@/auth';
 import { RosterHistory } from './roster-history';
+import { SessionRegistration } from './manage-sessions';
 
 type TeamFields = { name: string; mainMentorId: string };
 type TeamBaseline = { name: string; mainMentorId: number };
@@ -295,6 +296,14 @@ function TeamDetail({ team, mentors, commit, onRefresh, onDeleted, onNotice }: {
           return saved;
         }} />
       </section>
+      <SessionRegistration
+        team={team}
+        mentors={mentors}
+        onSaved={() => commit((current) => current.map((item) =>
+          item.id === team.id ? { ...item, sessionCount: item.sessionCount + 1 } : item
+        ))}
+        onNotice={onNotice}
+      />
       <StudentSection team={team} commit={commit} onRefresh={onRefresh} onNotice={onNotice} />
       <section className="rounded-2xl border border-border bg-card p-5 sm:p-7">
         <h4 className="text-sm font-semibold">Exclusão da equipe</h4>

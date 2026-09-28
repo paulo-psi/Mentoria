@@ -33,12 +33,13 @@ export async function runRosterTests({
 
   const databaseName = `roster_test_${randomUUID().replaceAll("-", "")}`;
   const admin = new Client({ connectionString: env.DATABASE_URL });
-  const workingDir = await fs.mkdtemp(path.join(tempDirectory, "roster-test-"));
+  let workingDir;
   let created = false;
   let result;
   let operationError;
 
   try {
+    workingDir = await fs.mkdtemp(path.join(tempDirectory, "roster-test-"));
     await admin.connect();
     const securityCheck = await admin.query(
       "select current_database(), rolcreatedb from pg_roles where rolname = current_user",
@@ -92,7 +93,14 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
       error.exitCode = generation.status ?? 1;
       throw error;
     }
-    if (generation.status !== 0) throw new Error("Failed to generate the application schema for roster tests.");
+    if (generation.status !== 0) {
+      const exitCode = generation.status ?? 1;
+      const error = new Error(
+        `Failed to generate the application schema for roster tests (exit code ${exitCode}).`,
+      );
+      error.exitCode = exitCode;
+      throw error;
+    }
     const migrations = (await fs.readdir(migrationsDir)).filter((name) => name.endsWith(".sql"));
     if (migrations.length !== 1) {
       throw new Error("Expected exactly one initial migration from the application schema.");
@@ -102,8 +110,14 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
     let fixtureError;
     try {
       await fixture.connect();
-      const { rows: [{ name }] } = await fixture.query("select current_database() as name");
-      if (name !== databaseName) throw new Error("Refusing to apply fixtures outside the generated test database.");
+      const databaseCheck = await fixture.query("select current_database() as name");
+      const connectedDatabase = databaseCheck?.rows?.[0]?.name;
+      if (
+        typeof connectedDatabase !== "string" ||
+        connectedDatabase !== databaseName
+      ) {
+        throw new Error("Refusing to apply fixtures outside the generated test database.");
+      }
       await fixture.query(await fs.readFile(path.join(migrationsDir, migrations[0]), "utf8"));
     } catch (error) {
       fixtureError = error;
@@ -176,7 +190,9 @@ globalThis.require = __createRequire(import.meta.url);`,
     await attemptCleanup(() => admin.query(`DROP DATABASE "${databaseName}"`));
   }
   await attemptCleanup(() => admin.end());
-  await attemptCleanup(() => fs.rm(workingDir, { recursive: true, force: true }));
+  if (workingDir) {
+    await attemptCleanup(() => fs.rm(workingDir, { recursive: true, force: true }));
+  }
 
   if (cleanupErrors.length > 0 && (operationError || result !== 0)) {
     const primaryError = operationError ?? Object.assign(

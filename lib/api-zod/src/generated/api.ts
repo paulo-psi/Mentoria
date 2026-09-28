@@ -244,6 +244,85 @@ export const CreateStudentResponse = zod.object({
 
 
 /**
+ * @summary Record a mentoring session for a team
+ */
+
+
+
+export const CreateMentoringSessionParams = zod.object({
+  "teamId": zod.coerce.number().int().min(1)
+})
+
+
+export const createMentoringSessionBodyTeamNpsMin = 0;
+export const createMentoringSessionBodyTeamNpsMax = 10;
+
+export const createMentoringSessionBodyTeamActionabilityMin = 0;
+export const createMentoringSessionBodyTeamActionabilityMax = 10;
+
+export const createMentoringSessionBodyMentorCommitmentMin = 0;
+export const createMentoringSessionBodyMentorCommitmentMax = 10;
+
+export const createMentoringSessionBodyMentorTractionMin = 0;
+export const createMentoringSessionBodyMentorTractionMax = 10;
+
+export const createMentoringSessionBodyTeamFeedbackStrongPointsMax = 5000;
+
+export const createMentoringSessionBodyTeamFeedbackImprovementsMax = 5000;
+
+export const createMentoringSessionBodyAgreedNextStepsMax = 5000;
+
+export const createMentoringSessionBodyMentorQualitativeAssessmentMax = 5000;
+
+
+
+export const CreateMentoringSessionBody = zod.object({
+  "mentorId": zod.number().int().min(1),
+  "sessionType": zod.enum(['principal', 'transversal', 'externo']),
+  "sessionDate": zod.coerce.date(),
+  "teamNps": zod.number().int().min(createMentoringSessionBodyTeamNpsMin).max(createMentoringSessionBodyTeamNpsMax),
+  "teamActionability": zod.number().int().min(createMentoringSessionBodyTeamActionabilityMin).max(createMentoringSessionBodyTeamActionabilityMax),
+  "mentorCommitment": zod.number().int().min(createMentoringSessionBodyMentorCommitmentMin).max(createMentoringSessionBodyMentorCommitmentMax),
+  "mentorTraction": zod.number().int().min(createMentoringSessionBodyMentorTractionMin).max(createMentoringSessionBodyMentorTractionMax),
+  "teamFeedbackStrongPoints": zod.string().min(1).max(createMentoringSessionBodyTeamFeedbackStrongPointsMax),
+  "teamFeedbackImprovements": zod.string().min(1).max(createMentoringSessionBodyTeamFeedbackImprovementsMax),
+  "agreedNextSteps": zod.string().min(1).max(createMentoringSessionBodyAgreedNextStepsMax),
+  "mentorQualitativeAssessment": zod.string().min(1).max(createMentoringSessionBodyMentorQualitativeAssessmentMax)
+})
+
+export const createMentoringSessionResponseTeamNpsMin = 0;
+export const createMentoringSessionResponseTeamNpsMax = 10;
+
+export const createMentoringSessionResponseTeamActionabilityMin = 0;
+export const createMentoringSessionResponseTeamActionabilityMax = 10;
+
+export const createMentoringSessionResponseMentorCommitmentMin = 0;
+export const createMentoringSessionResponseMentorCommitmentMax = 10;
+
+export const createMentoringSessionResponseMentorTractionMin = 0;
+export const createMentoringSessionResponseMentorTractionMax = 10;
+
+
+
+export const CreateMentoringSessionResponse = zod.object({
+  "id": zod.number().int(),
+  "teamId": zod.number().int(),
+  "mentorId": zod.number().int(),
+  "sessionType": zod.enum(['principal', 'transversal', 'externo']),
+  "sessionDate": zod.coerce.date(),
+  "teamNps": zod.number().int().min(createMentoringSessionResponseTeamNpsMin).max(createMentoringSessionResponseTeamNpsMax),
+  "teamActionability": zod.number().int().min(createMentoringSessionResponseTeamActionabilityMin).max(createMentoringSessionResponseTeamActionabilityMax),
+  "mentorCommitment": zod.number().int().min(createMentoringSessionResponseMentorCommitmentMin).max(createMentoringSessionResponseMentorCommitmentMax),
+  "mentorTraction": zod.number().int().min(createMentoringSessionResponseMentorTractionMin).max(createMentoringSessionResponseMentorTractionMax),
+  "teamFeedbackStrongPoints": zod.string(),
+  "teamFeedbackImprovements": zod.string(),
+  "agreedNextSteps": zod.string(),
+  "mentorQualitativeAssessment": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Update a student's name
  */
 

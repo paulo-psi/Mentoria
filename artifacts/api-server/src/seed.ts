@@ -13,7 +13,7 @@ import { logger } from "./lib/logger";
 import { rosterWriteLock } from "./lib/roster-lock";
 import { officialTeams } from "./official-data";
 
-const legacyDemoMentors = [
+export const legacyDemoMentors = [
   { name: "Ana Beatriz Costa", email: "ana.costa@example.org", expertiseArea: "Growth & Marketing", mentorType: "interno" },
   { name: "Bruno Almeida", email: "bruno.almeida@example.org", expertiseArea: "Finanças & Pricing", mentorType: "interno" },
   { name: "Camila Rezende", email: "camila.rezende@example.org", expertiseArea: "Produto & UX", mentorType: "interno" },
@@ -26,7 +26,7 @@ const legacyDemoMentors = [
   { name: "João Pedro Farias", email: "joao.farias@example.org", expertiseArea: "Expansão Internacional", mentorType: "externo" },
 ] as const;
 
-const legacyDemoTeams = [
+export const legacyDemoTeams = [
   {
     name: "Verdeira",
     pitchSummary: "Conecta pequenos produtores a restaurantes com previsão de demanda para reduzir perdas de alimentos.",
@@ -128,7 +128,7 @@ function matchesOfficialDataset(mentors: MentorRow[], teams: TeamRow[], students
   return true;
 }
 
-function legacySessionPayloads(
+export function legacySessionPayloads(
   mentorIdByName: Map<string, number>,
   teamIdByName: Map<string, number>,
 ) {

@@ -52,11 +52,14 @@ const queryClient = new QueryClient();
 function normalizeSearchText(value: string): string {
   return value
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[\u2018\u2019\u201b\u02bc\uff07]/gu, "'")
+    .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/gu, '-')
+    .replace(/\s+/g, ' ')
     .toLocaleLowerCase('pt-BR');
 }
 
-function Home() {
+export function Home() {
   const [search, setSearch] = useState('');
   const access = useGetAccessPermissions({
     query: {
@@ -89,9 +92,9 @@ function Home() {
     const normalizedSearch = normalizeSearchText(search.trim());
     if (!normalizedSearch) return source;
     return source.filter((team) =>
-      normalizeSearchText(
-        [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].join(' '),
-      ).includes(normalizedSearch),
+      [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].some(
+        (name) => normalizeSearchText(name).includes(normalizedSearch),
+      ),
     );
   }, [search, teams.data]);
 

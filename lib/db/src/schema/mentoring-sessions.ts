@@ -35,7 +35,7 @@ export const mentoringSessionsTable = pgTable(
 );
 
 const score = z.number().int().min(0).max(10);
-const completeFeedback = z.string().trim().min(1);
+const completeFeedback = z.string().trim().min(1).max(5000);
 
 export const insertMentoringSessionSchema = createInsertSchema(mentoringSessionsTable, {
   sessionType: z.enum(["principal", "transversal", "externo"]),
