@@ -12,7 +12,7 @@ import {
 import teamRoutes from "../src/routes/team-maintenance";
 import studentRoutes from "../src/routes/students";
 import listRoutes from "../src/routes/teams";
-import healthRoutes from "../src/routes/health";
+import healthRoutes, { HEALTH_DB_TIMEOUT_MS } from "../src/routes/health";
 import { rosterWriteLock } from "../src/lib/roster-lock";
 import { officialTeams } from "../src/official-data";
 import {
@@ -83,9 +83,11 @@ type Team = {
 
 async function request(
   method: string, path: string, body?: unknown, user?: "admin" | "reader" | "other",
+  signal?: AbortSignal,
 ) {
   const response = await fetch(baseUrl + path, {
     method,
+    signal,
     headers: {
       ...(user ? { "x-test-user": user } : {}),
       ...(body === undefined ? {} : { "content-type": "application/json" }),
@@ -190,8 +192,43 @@ test("health reports a disconnected database when its query fails", async () => 
       body: { status: "error", database: "disconnected" },
     });
     assert.equal(queryMock.mock.callCount(), 1);
-    assert.equal(queryMock.mock.calls[0].arguments[0], "SELECT 1");
+    assert.deepEqual(queryMock.mock.calls[0].arguments[0], {
+      text: "SELECT 1",
+      query_timeout: HEALTH_DB_TIMEOUT_MS,
+    });
   } finally {
+    queryMock?.mock.restore();
+    await stop();
+  }
+});
+
+test("health returns a bounded failure when its database query stalls", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the stalled-query test must use the disposable test database");
+  await start({ seed: false });
+  let releaseQuery: (() => void) | undefined;
+  const stalledQuery = new Promise<void>((resolve) => { releaseQuery = resolve; });
+  let queryMock: ReturnType<typeof mock.method> | undefined;
+  try {
+    queryMock = mock.method(pool, "query", () => stalledQuery);
+    const started = performance.now();
+    assert.deepEqual(
+      await request("GET", "/health", undefined, undefined, AbortSignal.timeout(HEALTH_DB_TIMEOUT_MS + 2_500)),
+      { status: 503, body: { status: "error", database: "disconnected" } },
+    );
+    assert.ok(
+      performance.now() - started < HEALTH_DB_TIMEOUT_MS + 2_000,
+      "monitoring must receive a failure promptly rather than wait for the stalled query",
+    );
+    assert.equal(queryMock.mock.callCount(), 1);
+    assert.deepEqual(queryMock.mock.calls[0].arguments[0], {
+      text: "SELECT 1",
+      query_timeout: HEALTH_DB_TIMEOUT_MS,
+    });
+  } finally {
+    releaseQuery?.();
     queryMock?.mock.restore();
     await stop();
   }
