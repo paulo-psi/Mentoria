@@ -2454,7 +2454,13 @@ test("deleting every official session leaves the session list empty after startu
       "startup must preserve mentors, teams and students without recreating deleted sessions",
     );
     assert.deepEqual(afterSeed.sessions, [], "startup must not recreate sessions after the last ones are deleted");
+
+    await start({ seed: false });
+    const apiTeam = (await teams()).find((team) => team.id === firstSession.teamId);
+    assert.ok(apiTeam, "the API must continue to return the affected official team");
+    assert.equal(apiTeam.sessionCount, 0, "the team list API must report zero sessions after all sessions are deleted");
   } finally {
+    await stop();
     await clearRosterTables();
     assert.deepEqual(
       await rosterSnapshot(),
