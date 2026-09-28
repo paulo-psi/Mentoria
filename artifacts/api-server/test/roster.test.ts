@@ -697,6 +697,65 @@ test("a newly recorded official session survives startup seeding", async () => {
   }
 });
 
+test("edited feedback on an official session survives startup seeding", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the edited session must use the disposable test database");
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    const team = official.teams.find(({ name }) => name === officialTeams[0].name);
+    const mentor = official.mentors.find(({ name }) => name === officialTeams[0].mentor);
+    assert.ok(team);
+    assert.ok(mentor);
+    assert.equal(team.mainMentorId, mentor.id);
+    const [session] = await db.insert(mentoringSessionsTable).values({
+      teamId: team.id,
+      mentorId: mentor.id,
+      sessionType: "principal",
+      sessionDate: "2026-03-03",
+      teamNps: 9,
+      teamActionability: 8,
+      mentorCommitment: 9,
+      mentorTraction: 7,
+      teamFeedbackStrongPoints: "Boa colaboração",
+      teamFeedbackImprovements: "Aprimorar o planejamento",
+      agreedNextSteps: "Revisar o próximo ciclo",
+      mentorQualitativeAssessment: "Evolução consistente",
+    }).returning();
+    assert.ok(session);
+
+    const editedFeedback = "Aprimorar o planejamento com base nos dados do piloto.";
+    const [editedSession] = await db.update(mentoringSessionsTable)
+      .set({ teamFeedbackImprovements: editedFeedback })
+      .where(eq(mentoringSessionsTable.id, session.id))
+      .returning();
+    assert.deepEqual(
+      editedSession,
+      { ...session, teamFeedbackImprovements: editedFeedback },
+      "the update must change only the selected feedback field",
+    );
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, [editedSession], "the corrected session must be present before startup");
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "startup must preserve mentors, teams, students and the corrected official session",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
 test("an official transversal session with another mentor survives startup seeding", async () => {
   const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
     "SELECT current_database() AS name",
