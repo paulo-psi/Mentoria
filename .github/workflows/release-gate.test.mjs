@@ -165,4 +165,12 @@ test("GitHub Actions workflows are linted in CI and block release on failure", a
     lintJob,
     /ACTIONLINT_BIN="\$\(go env GOPATH\)\/bin\/actionlint" node --test \.github\/workflows\/actionlint-negative\.test\.mjs/,
   );
+  assert.match(
+    lintJob,
+    /- name: Install ShellCheck\n        run: sudo apt-get update && sudo apt-get install -y shellcheck/,
+  );
+  assert.match(
+    lintJob,
+    /- name: Lint release shell scripts\n        run: shellcheck \.github\/scripts\/\*\.sh/,
+  );
 });
