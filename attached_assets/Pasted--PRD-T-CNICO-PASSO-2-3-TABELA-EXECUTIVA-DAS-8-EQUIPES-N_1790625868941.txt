@@ -1,0 +1,68 @@
+### PRD TÉCNICO - PASSO 2.3: TABELA EXECUTIVA DAS 8 EQUIPES NO FRONTEND
+
+Atue como Engenheiro de Software Sênior e Especialista em UI/UX. Sua tarefa exclusiva neste passo é implementar a seção da Tabela Executiva de Equipes logo abaixo dos 4 cards de KPI na tela autenticada, consumindo os dados através dos hooks gerados pelo Orval/React Query a partir do contrato OpenAPI.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Renderizar a listagem das 8 equipes em uma tabela visual minimalista e moderna (estética shadcn/ui), permitindo ao gestor identificar em segundos: estágio de cada projeto, mentor principal vinculado, volume de sessões acumuladas, última nota e o próximo compromisso semanal acordado.
+
+---
+
+#### 2. STACK E GOVERNANÇA TÉCNICA
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`. Proibido `npm` ou `yarn`.
+- **Camada de Dados:**
+  - Utilize o hook do React Query gerado pelo Orval para buscar as equipes (ex.: `useGetTeams` ou equivalente existente no contrato OpenAPI).
+  - Caso o endpoint de listagem de equipes precise expor campos agregados da última sessão (`lastSessionDate`, `lastSessionScore`, `latestAgreedNextSteps`, `totalSessions`) que ainda não constem no contrato OpenAPI, atualize primeiro o arquivo YAML da especificação, rode o script de geração do Orval (`pnpm run codegen`) e só então conecte à UI.
+- **Design System:**
+  - Paleta neutra: fundo da tabela `bg-white`, bordas discretas `border-zinc-200`, cantos suaves `rounded-xl`, tipografia `Inter`.
+  - Ícones: `lucide-react` (ex.: `FileText`, `ChevronRight`, `Calendar`, `User`).
+
+---
+
+#### 3. COMPONENTES VISUAIS A IMPLEMENTAR
+
+##### A. Cabeçalho da Seção de Equipes
+- Título da seção: **"Equipes em Acompanhamento"** (`text-base font-semibold text-zinc-900`).
+- Subtítulo ou badge discreto: "8 startups ativas no ciclo" (`text-xs text-zinc-500`).
+- Campo opcional de busca rápida/filtro por texto (filtra localmente pelo nome da equipe ou nome do mentor).
+
+##### B. Tabela Executiva (Layout e Colunas)
+Estruture uma tabela limpa e responsiva (com container de rolagem horizontal para telas menores) contendo as seguintes colunas:
+
+1. **Equipe & Proposta:**
+   - Nome da startup em negrito (`font-medium text-zinc-900`).
+   - Pitch summary/resumo do projeto logo abaixo em texto secundário discreto (`text-xs text-zinc-500 truncate max-w-xs`).
+2. **Estágio:**
+   - Badge neutro arredondado indicando o estágio atual (ex.: `bg-zinc-100 text-zinc-700 text-xs px-2.5 py-0.5 rounded-full border border-zinc-200`).
+3. **Mentor Principal:**
+   - Nome do mentor com a área de especialidade em texto menor logo abaixo (ex.: "Dra. Helena Ramos • Saúde & Produto").
+4. **Sessões Realizadas:**
+   - Contador numérico claro (ex.: "3 sessões").
+   - Indicador visual sutil se a equipe já realizou sessões transversais/externas.
+5. **Última Avaliação:**
+   - Exibição da nota do último encontro (escala 0 a 10) com indicador neutro (ex.: badge com nota em negrito).
+6. **Próximo Passo Acordado:**
+   - Pílula ou trecho resumido exibindo o texto do último `agreed_next_steps` (com truncamento de linha elegante para manter a tabela compacta).
+7. **Ação:**
+   - Botão discreto **"Ver Dossiê"** (`text-xs text-zinc-600 hover:text-zinc-900 border border-zinc-200 hover:bg-zinc-50 px-2.5 py-1 rounded-md transition-colors inline-flex items-center gap-1`).
+   - *Nota:* O clique neste botão deve emitir apenas um log de console ou estado placeholder por enquanto, pois a abertura do Dossiê Completo será construída no Marco 3.
+
+##### C. Tratamento de Estados (UX)
+- **Loading:** Tabela com linhas em skeleton pulse (`animate-pulse bg-zinc-100 h-12 rounded`) durante o carregamento inicial.
+- **Empty State:** Caso não haja equipes cadastradas, exiba uma mensagem neutra e amigável centralizada.
+
+---
+
+#### 4. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] O comando `pnpm run typecheck` passa sem nenhum erro de tipagem.
+- [ ] A suíte de testes unitários e de integração (`pnpm test`) passa integralmente com os devidos mocks atualizados.
+- [ ] Todas as 8 equipes cadastradas no banco são renderizadas com seus respectivos dados reais abaixo dos cards de KPI.
+- [ ] O layout permanece estável e sem overflow horizontal descontrolado na tela autenticada.
+
+---
+
+#### 5. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO implemente a gaveta lateral (Drawer / Slide-over) do Dossiê Completo da equipe (escopo do Marco 3).
+- NÃO ative o formulário de cadastro de nova mentoria no botão "+ Novo Registro" (escopo do Marco 4).
+- NÃO altere regras de permissão ou fluxo de autenticação do Clerk.
