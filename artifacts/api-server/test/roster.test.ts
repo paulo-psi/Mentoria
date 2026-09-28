@@ -1074,8 +1074,12 @@ test("a student addition concurrent with startup seed is serialized and preserve
     const addedStudent = response.body as {
       id: number; name: string; sortOrder: number;
     };
-    assert.equal(addedStudent.name, addedName);
-    assert.equal(addedStudent.sortOrder, nextSortOrder);
+    assert.ok(Number.isInteger(addedStudent.id) && addedStudent.id > 0);
+    assert.deepEqual(response.body, {
+      id: addedStudent.id,
+      name: addedName,
+      sortOrder: nextSortOrder,
+    }, "student creation must return only the documented response fields");
 
     const after = await rosterSnapshot();
     const insertedRow = after.students.find(({ id }) => id === addedStudent.id);
