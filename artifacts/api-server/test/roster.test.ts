@@ -12,6 +12,7 @@ import {
 import teamRoutes from "../src/routes/team-maintenance";
 import studentRoutes from "../src/routes/students";
 import listRoutes from "../src/routes/teams";
+import healthRoutes from "../src/routes/health";
 import { rosterWriteLock } from "../src/lib/roster-lock";
 import { officialTeams } from "../src/official-data";
 import {
@@ -52,7 +53,7 @@ async function start({ seed = true }: { seed?: boolean } = {}) {
     req.log = logger;
     next();
   });
-  app.use("/api", listRoutes, teamRoutes, studentRoutes);
+  app.use("/api", healthRoutes, listRoutes, teamRoutes, studentRoutes);
   server = app.listen(0);
   await new Promise<void>((resolve) => server!.once("listening", resolve));
   const address = server.address();
@@ -167,6 +168,34 @@ async function clearRosterTables() {
   await db.delete(teamsTable);
   await db.delete(mentorsTable);
 }
+
+test("health reports a disconnected database when its query fails", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the outage test must use the disposable test database");
+  await start({ seed: false });
+  let queryMock: ReturnType<typeof mock.method> | undefined;
+  try {
+    assert.deepEqual(await request("GET", "/health"), {
+      status: 200,
+      body: { status: "ok", database: "connected" },
+    });
+
+    queryMock = mock.method(pool, "query", async () => {
+      throw new Error("simulated database outage");
+    });
+    assert.deepEqual(await request("GET", "/health"), {
+      status: 503,
+      body: { status: "error", database: "disconnected" },
+    });
+    assert.equal(queryMock.mock.callCount(), 1);
+    assert.equal(queryMock.mock.calls[0].arguments[0], "SELECT 1");
+  } finally {
+    queryMock?.mock.restore();
+    await stop();
+  }
+});
 
 async function insertLegacyDemo({ withRealStudent = false } = {}) {
   const mentors = await db.insert(mentorsTable).values([...legacyDemoMentors]).returning();
