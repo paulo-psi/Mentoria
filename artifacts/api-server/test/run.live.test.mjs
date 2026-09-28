@@ -10,7 +10,10 @@ import { runRosterTests } from "./run.mjs";
 
 const { Client: PgClient } = createRequire(new URL("../../../lib/db/package.json", import.meta.url))("pg");
 
-async function verifyLiveRunnerCleanup(rosterProcessStatus) {
+async function verifyLiveRunnerCleanup({
+  rosterProcessStatus = 0,
+  schemaGenerationStatus = 0,
+} = {}) {
   const probeTable = `fixture_isolation_probe_${randomUUID().replaceAll("-", "")}`;
   assert.ok(
     process.env.DATABASE_URL && process.env.NODE_ENV !== "production" && !process.env.REPLIT_DEPLOYMENT,
@@ -20,6 +23,7 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
   const verifier = new PgClient({ connectionString: process.env.DATABASE_URL });
   const tempDirectories = [];
   let createdDatabase;
+  const droppedDatabases = [];
   let fixtureDatabase;
   let fixtureTableCreated = false;
   let testProcessStarted = false;
@@ -29,6 +33,8 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
       const result = await super.query(sql, ...args);
       const create = sql.match(/^CREATE DATABASE "(roster_test_[a-f0-9]{32})"$/);
       if (create) createdDatabase = create[1];
+      const drop = sql.match(/^DROP DATABASE "([^"]+)"$/);
+      if (drop) droppedDatabases.push(drop[1]);
       if (sql === "select current_database() as name") fixtureDatabase = result.rows[0].name;
       if (sql === `CREATE TABLE ${probeTable} (id integer);`) {
         const { rows } = await super.query("select to_regclass($1) as table_name", [probeTable]);
@@ -50,7 +56,7 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
     conflictingUrl.pathname = `/${source.name}`;
     conflictingUrl.searchParams.set("database", "nonexistent_conflicting_database_option");
 
-    const result = await runRosterTests({
+    const run = runRosterTests({
       env: {
         ...process.env,
         DATABASE_URL: conflictingUrl.toString(),
@@ -69,6 +75,7 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
       },
       spawn: (command, args) => {
         if (command === "pnpm" && args.includes("generate")) {
+          if (schemaGenerationStatus !== 0) return { status: schemaGenerationStatus };
           const config = args.find((arg) => arg.startsWith("--config=")).slice("--config=".length);
           const schemaDirectory = path.join(path.dirname(config), "schema");
           mkdirSync(schemaDirectory);
@@ -86,16 +93,33 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
       tempDirectory: tmpdir(),
     });
 
-    assert.equal(result, rosterProcessStatus, "the roster subprocess exit status remains visible to the caller");
+    if (schemaGenerationStatus !== 0) {
+      await assert.rejects(run, (error) => {
+        assert.match(error.message, new RegExp(`Failed to generate the application schema.*exit code ${schemaGenerationStatus}`));
+        assert.equal(error.exitCode, schemaGenerationStatus, "the generator's exit status remains visible");
+        return true;
+      });
+    } else {
+      assert.equal(await run, rosterProcessStatus, "the roster subprocess exit status remains visible to the caller");
+    }
     assert.match(createdDatabase, /^roster_test_[a-f0-9]{32}$/);
-    assert.equal(fixtureDatabase, createdDatabase, "pg connected to the generated database, not the query option");
-    assert.equal(fixtureTableCreated, true, "fixture SQL ran in the generated database");
+    assert.deepEqual(droppedDatabases, [createdDatabase], "only the generated database was dropped");
+    if (schemaGenerationStatus !== 0) {
+      assert.equal(fixtureDatabase, undefined, "fixture setup did not start after generation failed");
+      assert.equal(fixtureTableCreated, false, "no fixture SQL ran after generation failed");
+      assert.equal(testProcessStarted, false, "roster tests did not start after generation failed");
+    } else {
+      assert.equal(fixtureDatabase, createdDatabase, "pg connected to the generated database, not the query option");
+      assert.equal(fixtureTableCreated, true, "fixture SQL ran in the generated database");
+      assert.equal(testProcessStarted, true);
+    }
     const { rows: [sourceProbe] } = await verifier.query(
       "select to_regclass($1) as table_name",
       [probeTable],
     );
     assert.equal(sourceProbe.table_name, null, "fixture SQL did not create a table in the source database");
-    assert.equal(testProcessStarted, true);
+    const { rows: [sourceAfterRun] } = await verifier.query("select current_database() as name");
+    assert.equal(sourceAfterRun.name, source.name, "the source database remains accessible");
     const { rows: [sourceDatabase] } = await verifier.query(
       "select count(*)::integer as count from pg_database where datname = $1",
       [source.name],
@@ -131,9 +155,13 @@ async function verifyLiveRunnerCleanup(rosterProcessStatus) {
 }
 
 test("the real pg client applies fixtures only to the disposable database and cleans up after success", async () => {
-  await verifyLiveRunnerCleanup(0);
+  await verifyLiveRunnerCleanup({ rosterProcessStatus: 0 });
 });
 
 test("the real runner reports a failed roster process and cleans up only its disposable database", async () => {
-  await verifyLiveRunnerCleanup(23);
+  await verifyLiveRunnerCleanup({ rosterProcessStatus: 23 });
+});
+
+test("the real runner reports schema generation failure and cleans up only its disposable database", async () => {
+  await verifyLiveRunnerCleanup({ schemaGenerationStatus: 17 });
 });
