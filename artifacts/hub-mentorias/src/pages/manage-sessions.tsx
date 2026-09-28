@@ -29,6 +29,7 @@ export function SessionRegistration({
           mentors={mentors}
           onNotice={onNotice}
           onSaved={onSaved}
+          submitLabel="Registrar sessão"
           team={team}
         />
       )}

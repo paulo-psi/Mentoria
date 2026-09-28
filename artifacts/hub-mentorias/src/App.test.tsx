@@ -1,28 +1,61 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Team, TeamSessionHistoryItem } from '@workspace/api-client-react';
+import {
+  buildMentoringSessionPayload,
+  mentoringSessionInputSchema,
+} from '@/components/session-registration-form';
 import { Home } from './App';
 
-const { getDashboardStats, getTeamSessions, getTeams } = vi.hoisted(() => ({
+const {
+  createSession,
+  getAccessPermissions,
+  getDashboardStats,
+  getMentors,
+  getTeamSessions,
+  getTeams,
+  invalidateQueries,
+  showToast,
+} = vi.hoisted(() => ({
+  createSession: vi.fn(),
+  getAccessPermissions: vi.fn(),
   getDashboardStats: vi.fn(),
+  getMentors: vi.fn(),
   getTeamSessions: vi.fn(),
   getTeams: vi.fn(),
+  invalidateQueries: vi.fn(),
+  showToast: vi.fn(),
 }));
 
 vi.mock('@workspace/api-client-react', () => ({
   getGetAccessPermissionsQueryKey: () => ['access'],
-  getGetDashboardStatsQueryKey: () => ['dashboard-stats'],
+  getGetDashboardStatsQueryKey: () => ['/api/dashboard/stats'],
+  getGetMentorsQueryKey: () => ['/api/mentors'],
   getGetTeamSessionsQueryKey: (teamId: number) => [`/api/teams/${teamId}/sessions`],
   getGetHealthQueryKey: () => ['health'],
-  getGetTeamsQueryKey: () => ['teams'],
+  getGetTeamsQueryKey: () => ['/api/teams'],
   getHealthCheckQueryKey: () => ['health-check'],
-  useGetAccessPermissions: () => ({ data: { canManage: false }, isError: false, refetch: vi.fn() }),
+  useCreateMentoringSession: () => ({ isPending: false, mutateAsync: createSession }),
+  useGetAccessPermissions: getAccessPermissions,
   useGetDashboardStats: getDashboardStats,
+  useGetMentors: getMentors,
   useGetTeamSessions: getTeamSessions,
   useHealthCheck: () => ({ data: { status: 'ok' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetHealth: () => ({ data: { status: 'ok', database: 'connected' }, isLoading: false, isFetching: false, refetch: vi.fn() }),
   useGetTeams: getTeams,
+}));
+
+vi.mock('@tanstack/react-query', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries }),
+  };
+});
+
+vi.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({ toast: showToast, toasts: [] }),
 }));
 
 vi.mock('./auth', () => ({
@@ -122,6 +155,23 @@ const punctuationVariantRoster = [
 ];
 
 beforeEach(() => {
+  getAccessPermissions.mockReturnValue({
+    data: { canManage: false },
+    isError: false,
+    refetch: vi.fn(),
+  });
+  getMentors.mockReturnValue({
+    data: [
+      { id: 1, name: 'João Araújo' },
+      { id: 2, name: 'Márcia Évora' },
+    ],
+    isError: false,
+    isFetching: false,
+    isLoading: false,
+    refetch: vi.fn(),
+  });
+  createSession.mockResolvedValue(undefined);
+  invalidateQueries.mockResolvedValue(undefined);
   getTeamSessions.mockReturnValue({
     data: [],
     isError: false,
@@ -537,5 +587,223 @@ describe('visão geral do ciclo', () => {
     expect(screen.getByTestId('state-kpis-erro')).toBeTruthy();
     await user.click(screen.getByTestId('button-tentar-novamente-kpis'));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('registro de mentorias', () => {
+  function authorizeCoordinator() {
+    getAccessPermissions.mockReturnValue({
+      data: { canManage: true },
+      isError: false,
+      refetch: vi.fn(),
+    });
+  }
+
+  it('abre o modal para coordenação e sugere o mentor principal de cada equipe', async () => {
+    authorizeCoordinator();
+    const user = userEvent.setup();
+    render(<Home />);
+
+    const trigger = screen.getByRole('button', { name: 'Novo registro' });
+    expect(trigger.hasAttribute('disabled')).toBe(false);
+    await user.click(trigger);
+
+    expect(await screen.findByRole('dialog', { name: 'Novo registro de mentoria' })).toBeTruthy();
+    expect(getMentors).toHaveBeenCalledWith({
+      query: {
+        enabled: true,
+        queryKey: ['/api/mentors'],
+        staleTime: 30_000,
+      },
+    });
+    expect(screen.getByRole('heading', { name: 'Contexto do Encontro' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Avaliação da Equipe' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Avaliação do Mentor' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Próximos Passos' })).toBeTruthy();
+    expect((screen.getByTestId('select-equipe-registro') as HTMLSelectElement).value).toBe('1');
+    expect((screen.getByTestId('select-mentor-sessao-registro') as HTMLSelectElement).value).toBe('1');
+    expect(screen.getByTestId('status-mentor-sugerido').textContent).toContain(
+      'Mentor principal sugerido automaticamente',
+    );
+    expect((screen.getByTestId('input-data-sessao-registro') as HTMLInputElement).value).toMatch(
+      /^\d{4}-\d{2}-\d{2}$/,
+    );
+
+    await user.selectOptions(screen.getByTestId('select-equipe-registro'), '2');
+    await waitFor(() => {
+      expect((screen.getByTestId('select-mentor-sessao-registro') as HTMLSelectElement).value).toBe('2');
+    });
+    await user.click(screen.getByTestId('button-cancelar-sessao-registro'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it('valida notas inteiras, campos obrigatórios e datas de calendário reais com Zod', () => {
+    const validForm = {
+      mentorId: '1',
+      sessionType: 'principal',
+      sessionDate: '2026-02-28',
+      teamNps: '0',
+      teamActionability: '10',
+      mentorCommitment: '8',
+      mentorTraction: '9',
+      teamFeedbackStrongPoints: 'Boa comunicação.',
+      teamFeedbackImprovements: 'Ampliar entrevistas.',
+      agreedNextSteps: 'Concluir os testes.',
+      mentorQualitativeAssessment: 'A equipe avançou com consistência.',
+    } as const;
+
+    expect(mentoringSessionInputSchema.safeParse(validForm).success).toBe(true);
+    expect(
+      mentoringSessionInputSchema.safeParse({ ...validForm, sessionDate: '2026-02-31' }).success,
+    ).toBe(false);
+    expect(
+      mentoringSessionInputSchema.safeParse({ ...validForm, teamNps: '11' }).success,
+    ).toBe(false);
+    expect(
+      mentoringSessionInputSchema.safeParse({ ...validForm, teamNps: '3.5' }).success,
+    ).toBe(false);
+    expect(
+      mentoringSessionInputSchema.safeParse({ ...validForm, teamFeedbackStrongPoints: '   ' }).success,
+    ).toBe(false);
+    expect(
+      mentoringSessionInputSchema.safeParse({
+        ...validForm,
+        teamFeedbackStrongPoints: 'a'.repeat(5001),
+      }).success,
+    ).toBe(false);
+
+    const parsed = mentoringSessionInputSchema.parse(validForm);
+    expect(parsed.mentorId).toBe('1');
+    const payload = buildMentoringSessionPayload(parsed);
+    expect(payload.mentorId).toBe(1);
+    expect(payload.teamNps).toBe(0);
+    expect(payload.teamActionability).toBe(10);
+  });
+
+  it('impede salvar o formulário vazio e mostra as validações junto aos campos', async () => {
+    authorizeCoordinator();
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole('button', { name: 'Novo registro' }));
+    await screen.findByRole('dialog');
+    await user.selectOptions(screen.getByTestId('select-mentor-sessao-registro'), '');
+    fireEvent.change(screen.getByTestId('input-data-sessao-registro'), {
+      target: { value: '' },
+    });
+    await user.click(screen.getByTestId('button-salvar-sessao-registro'));
+
+    expect(createSession).not.toHaveBeenCalled();
+    expect(screen.getByText('Informe a data da sessão.')).toBeTruthy();
+    expect(screen.getByText('Selecione o mentor que conduziu a sessão.')).toBeTruthy();
+    expect(screen.getByText('Selecione uma nota para o nps da mentoria.')).toBeTruthy();
+    expect(screen.getAllByText('Preencha este campo.')).toHaveLength(4);
+  });
+
+  it('salva a mentoria, invalida o painel e mostra o novo registro no dossiê', async () => {
+    authorizeCoordinator();
+    const user = userEvent.setup();
+    render(<Home />);
+
+    await user.click(screen.getByRole('button', { name: 'Novo registro' }));
+    await screen.findByRole('dialog');
+    await user.selectOptions(screen.getByTestId('select-equipe-registro'), '2');
+    await user.selectOptions(screen.getByTestId('select-tipo-sessao-registro'), 'transversal');
+    fireEvent.change(screen.getByTestId('input-data-sessao-registro'), {
+      target: { value: '2026-05-12' },
+    });
+    await user.selectOptions(screen.getByTestId('select-mentor-sessao-registro'), '1');
+    await user.selectOptions(screen.getByTestId('select-teamNps-sessao-registro'), '10');
+    await user.selectOptions(screen.getByTestId('select-teamActionability-sessao-registro'), '8');
+    await user.selectOptions(screen.getByTestId('select-mentorCommitment-sessao-registro'), '7');
+    await user.selectOptions(screen.getByTestId('select-mentorTraction-sessao-registro'), '9');
+    await user.type(
+      screen.getByTestId('textarea-teamFeedbackStrongPoints-registro'),
+      'Comunicação clara e validação consistente.',
+    );
+    await user.type(
+      screen.getByTestId('textarea-teamFeedbackImprovements-registro'),
+      'Ampliar a amostra de entrevistas.',
+    );
+    await user.type(
+      screen.getByTestId('textarea-mentorQualitativeAssessment-registro'),
+      'A equipe demonstrou tração e boa capacidade de execução.',
+    );
+    await user.type(
+      screen.getByTestId('textarea-agreedNextSteps-registro'),
+      'Concluir cinco entrevistas até sexta-feira.',
+    );
+
+    await user.click(screen.getByTestId('button-salvar-sessao-registro'));
+
+    await waitFor(() =>
+      expect(createSession).toHaveBeenCalledWith({
+        teamId: 2,
+        data: {
+          mentorId: 1,
+          sessionType: 'transversal',
+          sessionDate: '2026-05-12',
+          teamNps: 10,
+          teamActionability: 8,
+          mentorCommitment: 7,
+          mentorTraction: 9,
+          teamFeedbackStrongPoints: 'Comunicação clara e validação consistente.',
+          teamFeedbackImprovements: 'Ampliar a amostra de entrevistas.',
+          agreedNextSteps: 'Concluir cinco entrevistas até sexta-feira.',
+          mentorQualitativeAssessment: 'A equipe demonstrou tração e boa capacidade de execução.',
+        },
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['/api/dashboard/stats'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['/api/teams'] });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['/api/teams/2/sessions'],
+    });
+    expect(showToast).toHaveBeenCalledWith({
+      title: 'Sessão registrada',
+      description: 'O histórico de Equipe Saúde foi atualizado.',
+    });
+
+    getTeamSessions.mockReturnValue({
+      data: [
+        {
+          id: 302,
+          sessionDate: '2026-05-12',
+          sessionType: 'transversal',
+          mentor: {
+            id: 1,
+            name: 'João Araújo',
+            expertiseArea: 'Educação & Produto',
+            mentorType: 'interno',
+          },
+          scores: {
+            teamNps: 10,
+            teamActionability: 8,
+            mentorCommitment: 7,
+            mentorTraction: 9,
+          },
+          qualitative: {
+            mentorQualitativeAssessment: 'A equipe demonstrou tração e boa capacidade de execução.',
+            teamFeedbackStrongPoints: 'Comunicação clara e validação consistente.',
+            teamFeedbackImprovements: 'Ampliar a amostra de entrevistas.',
+            agreedNextSteps: 'Concluir cinco entrevistas até sexta-feira.',
+          },
+          createdAt: '2026-05-12T15:00:00.000Z',
+        },
+      ] satisfies TeamSessionHistoryItem[],
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    await user.click(screen.getByRole('button', { name: 'Ver dossiê de Equipe Saúde' }));
+    expect(await screen.findByTestId('sessao-mentoria-302')).toBeTruthy();
+    expect(screen.getByTestId('parecer-mentor-302').textContent).toContain(
+      'A equipe demonstrou tração e boa capacidade de execução.',
+    );
   });
 });

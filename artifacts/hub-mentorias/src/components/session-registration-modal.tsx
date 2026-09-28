@@ -95,40 +95,6 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
             <EmptyTeamsState />
           ) : (
             <>
-              <div className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="mb-3 flex items-start gap-3">
-                  <UsersRound aria-hidden="true" className="mt-0.5 text-zinc-500" size={16} />
-                  <div>
-                    <label className="text-xs font-semibold text-zinc-800" htmlFor="registro-team">
-                      Contexto da equipe
-                    </label>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">Selecione a startup que recebeu a mentoria.</p>
-                  </div>
-                </div>
-                <div className="relative">
-                  <select
-                    className="h-11 w-full appearance-none rounded-lg border border-zinc-200 bg-zinc-50 px-3 pr-10 text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10"
-                    data-testid="select-equipe-registro"
-                    id="registro-team"
-                    onChange={(event) => setSelectedTeamId(event.target.value)}
-                    value={selectedTeam ? String(selectedTeam.id) : ''}
-                  >
-                    {teams.map((team) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
-                </div>
-                {selectedTeam && principalMentorIsAvailable && (
-                  <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500" data-testid="status-mentor-sugerido">
-                    <Check aria-hidden="true" className="text-zinc-700" size={13} />
-                    Mentor principal sugerido automaticamente
-                  </p>
-                )}
-              </div>
-
               {mentors.isLoading ? (
                 <MentorLoadingState />
               ) : mentors.isError ? (
@@ -138,9 +104,45 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
               ) : selectedTeam ? (
                 <SessionRegistrationForm
                   defaultMentorId={principalMentorIsAvailable ? selectedTeam.mainMentor.id : undefined}
+                  contextContent={
+                    <div className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50 p-3.5">
+                      <div className="mb-3 flex items-start gap-3">
+                        <UsersRound aria-hidden="true" className="mt-0.5 text-zinc-500" size={16} />
+                        <div>
+                          <label className="text-xs font-semibold text-zinc-800" htmlFor="registro-team">
+                            Equipe
+                          </label>
+                          <p className="mt-1 text-xs leading-5 text-zinc-500">Selecione a startup que recebeu a mentoria.</p>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <select
+                          className="h-11 w-full appearance-none rounded-lg border border-zinc-200 bg-white px-3 pr-10 text-sm font-medium text-zinc-900 outline-none transition-colors focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10"
+                          data-testid="select-equipe-registro"
+                          id="registro-team"
+                          onChange={(event) => setSelectedTeamId(event.target.value)}
+                          value={selectedTeam ? String(selectedTeam.id) : ''}
+                        >
+                          {teams.map((team) => (
+                            <option key={team.id} value={team.id}>
+                              {team.name}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                      </div>
+                      {principalMentorIsAvailable && (
+                        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500" data-testid="status-mentor-sugerido">
+                          <Check aria-hidden="true" className="text-zinc-700" size={13} />
+                          Mentor principal sugerido automaticamente
+                        </p>
+                      )}
+                    </div>
+                  }
                   key={selectedTeam.id}
                   mentors={mentors.data ?? []}
                   onSaved={handleSaved}
+                  onCancel={() => handleOpenChange(false)}
                   team={selectedTeam}
                   testIdSuffix="registro"
                 />

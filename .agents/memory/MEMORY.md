@@ -11,3 +11,4 @@
 - [PostgreSQL query config mutation](pg-query-config-mutation.md) — pg-pool mutates query config objects; construct timeout configs afresh for each call.
 - [OpenAPI date-only coercion](openapi-date-only.md) — generated Zod schemas coerce `format: date` strings to `Date`; preserve and strictly revalidate calendar-day values at the API boundary.
 - [Roster test helpers](roster-test-helpers.md) — keep object-return expressions attached to `return`; automatic semicolon insertion can silently invalidate fixture helpers.
+- [React Hook Form and Zod](react-hook-form-zod.md) — when resolver types cannot carry transformed output, validate string-valued controls and convert numbers at the API boundary.
