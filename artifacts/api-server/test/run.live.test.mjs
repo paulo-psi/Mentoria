@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { access, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -10,6 +11,7 @@ import { runRosterTests } from "./run.mjs";
 const { Client: PgClient } = createRequire(new URL("../../../lib/db/package.json", import.meta.url))("pg");
 
 test("the real pg client applies fixtures only to the disposable database despite a conflicting URL option", async () => {
+  const probeTable = `fixture_isolation_probe_${randomUUID().replaceAll("-", "")}`;
   assert.ok(
     process.env.DATABASE_URL && process.env.NODE_ENV !== "production" && !process.env.REPLIT_DEPLOYMENT,
     "Live runner verification requires a development DATABASE_URL outside a deployment.",
@@ -28,9 +30,9 @@ test("the real pg client applies fixtures only to the disposable database despit
       const create = sql.match(/^CREATE DATABASE "(roster_test_[a-f0-9]{32})"$/);
       if (create) createdDatabase = create[1];
       if (sql === "select current_database() as name") fixtureDatabase = result.rows[0].name;
-      if (sql === "CREATE TABLE fixture_isolation_probe (id integer);") {
-        const { rows } = await super.query("select to_regclass('fixture_isolation_probe') as table_name");
-        fixtureTableCreated = rows[0].table_name === "fixture_isolation_probe";
+      if (sql === `CREATE TABLE ${probeTable} (id integer);`) {
+        const { rows } = await super.query("select to_regclass($1) as table_name", [probeTable]);
+        fixtureTableCreated = rows[0].table_name === probeTable;
       }
       return result;
     }
@@ -72,7 +74,7 @@ test("the real pg client applies fixtures only to the disposable database despit
           mkdirSync(schemaDirectory);
           writeFileSync(
             path.join(schemaDirectory, "0000_initial.sql"),
-            "CREATE TABLE fixture_isolation_probe (id integer);",
+            `CREATE TABLE ${probeTable} (id integer);`,
           );
           return { status: 0 };
         }
@@ -89,7 +91,8 @@ test("the real pg client applies fixtures only to the disposable database despit
     assert.equal(fixtureDatabase, createdDatabase, "pg connected to the generated database, not the query option");
     assert.equal(fixtureTableCreated, true, "fixture SQL ran in the generated database");
     const { rows: [sourceProbe] } = await verifier.query(
-      "select to_regclass('fixture_isolation_probe') as table_name",
+      "select to_regclass($1) as table_name",
+      [probeTable],
     );
     assert.equal(sourceProbe.table_name, null, "fixture SQL did not create a table in the source database");
     assert.equal(testProcessStarted, true);
