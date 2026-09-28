@@ -28,6 +28,8 @@ function createHarness(mode) {
     tempDirectories: [],
     tempDirectoryRemovalAttempts: 0,
     tempDirectoryCreationError: new Error("simulated temporary-directory creation failure"),
+    tempConfigWriteAttempts: 0,
+    tempConfigWriteError: new Error("simulated temporary-config write failure"),
     sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
   };
 
@@ -184,7 +186,13 @@ function createHarness(mode) {
       }
       return rm(...args);
     },
-    writeFile,
+    writeFile: async (...args) => {
+      state.tempConfigWriteAttempts += 1;
+      if (mode === "temp-config-write-failure") {
+        throw state.tempConfigWriteError;
+      }
+      return writeFile(...args);
+    },
   };
 
   const spawn = (_command, args) => {
@@ -333,6 +341,28 @@ test("temporary-directory creation error remains primary when closing admin also
   assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
   assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
   assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+});
+
+test("temporary config write failure removes the disposable database and all temporary resources", async () => {
+  const harness = createHarness("temp-config-write-failure");
+
+  await assert.rejects(runWith(harness), (error) => {
+    assert.equal(error, harness.state.tempConfigWriteError);
+    return true;
+  });
+
+  assert.equal(harness.state.tempConfigWriteAttempts, 1, "writing the temporary config was attempted");
+  assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+  assert.equal(harness.state.terminateConnectionAttempts, 1, "connections to the disposable database were terminated");
+  assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases);
+  assert.equal(harness.state.adminEnded, true, "the administrative client was closed");
+  assert.equal(harness.state.fixtureConnectAttempts, 0, "no fixture client was started");
+  assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+  assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+  assert.equal(harness.state.testProcessStartAttempts, 0, "the roster process was not started");
+  assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+  assert.deepEqual(harness.state.schemaGenerationResults, [], "schema generation was not started");
+  await assertResourcesRemoved(harness.state);
 });
 
 test("schema generation failure removes the generated database and temporary files", async () => {
