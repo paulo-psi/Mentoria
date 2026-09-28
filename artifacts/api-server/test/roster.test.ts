@@ -1112,6 +1112,102 @@ test("a student addition concurrent with startup seed is serialized and preserve
   }
 });
 
+test("a student deletion concurrent with startup seed is serialized and preserved", async () => {
+  await clearRosterTables();
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "concurrent student deletion must use the disposable test database");
+  await seedDatabase();
+  await start({ seed: false });
+
+  let releaseBlocker!: () => void;
+  let signalLockAcquired!: () => void;
+  const blockerRelease = new Promise<void>((resolve) => { releaseBlocker = resolve; });
+  const lockAcquired = new Promise<void>((resolve) => { signalLockAcquired = resolve; });
+  const blocker = db.transaction(async (tx) => {
+    await tx.execute(rosterWriteLock);
+    signalLockAcquired();
+    await blockerRelease;
+  });
+
+  let seedRun: Promise<void> | undefined;
+  let deletionRun: Promise<{ status: number; body: unknown }> | undefined;
+  try {
+    await lockAcquired;
+    const before = await rosterSnapshot();
+    const team = (await teams())[0];
+    assert.ok(team, "the initial official seed must include a team");
+    const student = team.students[team.students.length - 1];
+    assert.ok(student, "the chosen team must include a student");
+    assert.equal(
+      student.sortOrder,
+      Math.max(...team.students.map(({ sortOrder }) => sortOrder)),
+      "delete the last student so no other student needs reordering",
+    );
+    assert.ok(before.students.some(({ id }) => id === student.id));
+    const expectedRemainingStudents = before.students.filter(({ id }) => id !== student.id);
+
+    let seedSettled = false;
+    let deletionSettled = false;
+    seedRun = seedDatabase().finally(() => { seedSettled = true; });
+    deletionRun = request(
+      "DELETE",
+      `/teams/${team.id}/students/${student.id}`,
+      { expectedName: student.name },
+      "admin",
+    ).finally(() => { deletionSettled = true; });
+
+    const deadline = Date.now() + 5_000;
+    let waitingOperations = 0;
+    while (Date.now() < deadline) {
+      const { rows: [{ count }] } = await pool.query<{ count: number }>(`
+        SELECT count(*)::int AS count
+        FROM pg_locks
+        WHERE locktype = 'advisory'
+          AND NOT granted
+          AND classid = 0
+          AND objid = 732941
+          AND objsubid = 1
+      `);
+      waitingOperations = count;
+      if (waitingOperations === 2) break;
+      assert.equal(seedSettled, false, "startup seed must wait for the shared roster lock");
+      assert.equal(deletionSettled, false, "student deletion must wait for the shared roster lock");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(waitingOperations, 2, "both concurrent operations must wait on the roster lock");
+
+    releaseBlocker();
+    const [_, response] = await Promise.all([seedRun, deletionRun]);
+    assert.equal(response.status, 204);
+
+    const after = await rosterSnapshot();
+    assert.deepEqual(after.mentors, before.mentors, "startup must not change mentors");
+    assert.deepEqual(after.teams, before.teams, "startup must not change teams");
+    assert.deepEqual(
+      after.students,
+      expectedRemainingStudents,
+      "the deleted student must stay absent and all other student rows must remain unchanged",
+    );
+    assert.deepEqual(after.sessions, before.sessions, "startup must not change sessions");
+    assert.equal(after.students.some(({ id }) => id === student.id), false);
+    assert.equal(after.students.length, before.students.length - 1);
+    assert.equal(after.mentors.length, before.mentors.length);
+    assert.equal(after.teams.length, before.teams.length);
+    assert.equal(after.sessions.length, before.sessions.length);
+  } finally {
+    releaseBlocker();
+    await blocker;
+    const pendingOperations: Promise<unknown>[] = [];
+    if (seedRun) pendingOperations.push(seedRun);
+    if (deletionRun) pendingOperations.push(deletionRun);
+    await Promise.allSettled(pendingOperations);
+    await stop();
+    await clearRosterTables();
+  }
+});
+
 test("a team edit concurrent with startup seed is serialized and preserved", async () => {
   await clearRosterTables();
   await seedDatabase();
