@@ -310,7 +310,7 @@ test("only the complete legacy demo migrates; any changed legacy data is preserv
   }
 });
 
-test("a changed legacy team or session field preserves every roster table", async (t) => {
+test("a changed legacy team or session signature field preserves every roster table", async (t) => {
   await t.test("team pitch summary differs from the legacy fixture", async () => {
     await assertLegacyDataPreservedAfterChange(async ({ teams }) => {
       await db.update(teamsTable)
@@ -319,13 +319,104 @@ test("a changed legacy team or session field preserves every roster table", asyn
     });
   });
 
-  await t.test("session evaluation differs from the legacy fixture", async () => {
+  await t.test("session team NPS differs from the legacy fixture", async () => {
     await assertLegacyDataPreservedAfterChange(async ({ sessions }) => {
       await db.update(mentoringSessionsTable)
         .set({ teamNps: 0 })
         .where(eq(mentoringSessionsTable.id, sessions[0].id));
     });
   });
+
+  type LegacyFixture = Awaited<ReturnType<typeof insertLegacyDemo>>;
+  const sessionChanges: Array<[
+    string,
+    (legacy: LegacyFixture) => Promise<unknown>,
+  ]> = [
+    [
+      "session team actionability differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ teamActionability: 0 })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "session mentor commitment differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ mentorCommitment: 0 })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "session mentor traction differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ mentorTraction: 0 })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "session team assignment differs from the legacy fixture",
+      async ({ sessions, teams }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ teamId: teams[1].id })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "session mentor assignment differs from the legacy fixture",
+      async ({ sessions, mentors }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ mentorId: mentors[1].id })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "session type differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ sessionType: "transversal" })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "team strong-points feedback differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ teamFeedbackStrongPoints: "Pontos fortes atualizados" })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "team improvements feedback differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ teamFeedbackImprovements: "Melhorias atualizadas" })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "agreed next steps differ from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ agreedNextSteps: "Próximos passos atualizados" })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+    [
+      "mentor qualitative assessment differs from the legacy fixture",
+      async ({ sessions }) => {
+        await db.update(mentoringSessionsTable)
+          .set({ mentorQualitativeAssessment: "Avaliação qualitativa atualizada" })
+          .where(eq(mentoringSessionsTable.id, sessions[0].id));
+      },
+    ],
+  ];
+
+  for (const [name, change] of sessionChanges) {
+    await t.test(name, async () => assertLegacyDataPreservedAfterChange(change));
+  }
 });
 
 test("a changed legacy mentor or team signature field preserves every roster table", async (t) => {
