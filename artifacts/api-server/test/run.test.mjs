@@ -6,7 +6,37 @@ import { runRosterTests } from "./run.mjs";
 
 const sourceUrl = "postgres://roster_test:local-only@127.0.0.1:5432/source_db";
 
-function createHarness(mode) {
+const failureSteps = new Set([
+  "adminConnect",
+  "fixtureConnect",
+  "securityQuery",
+  "terminateConnections",
+  "dropDatabase",
+  "fixtureVerificationQuery",
+  "applySql",
+  "adminEnd",
+  "fixtureEnd",
+  "tempDirectoryCreate",
+  "tempDirectoryRemove",
+  "tempConfigWrite",
+  "testProcessStart",
+  "testProcessThrow",
+  "bundle",
+]);
+
+function createHarness({
+  fail = [],
+  sourceDatabase = "source_db",
+  securityRow = "valid",
+  fixtureVerification = "valid",
+  migrations = ["0000_initial.sql"],
+  schemaResult = { status: 0 },
+  testResult = { status: 0 },
+} = {}) {
+  const fails = new Set(fail);
+  for (const step of fails) {
+    if (!failureSteps.has(step)) throw new Error(`Unknown simulated failure step: ${step}`);
+  }
   const state = {
     clientCreations: 0,
     adminConnectAttempts: 0,
@@ -31,7 +61,7 @@ function createHarness(mode) {
     tempConfigWriteAttempts: 0,
     tempConfigWriteError: new Error("simulated temporary-config write failure"),
     fixtureVerificationError: new Error("simulated fixture database-verification query failure"),
-    sourceDatabase: mode === "test-database-source" ? "roster_test_existing" : "source_db",
+    sourceDatabase,
   };
 
   class FakeClient {
@@ -45,14 +75,14 @@ function createHarness(mode) {
     async connect() {
       if (this.isAdmin) {
         state.adminConnectAttempts += 1;
-        if (mode === "admin-connect" || mode === "admin-connect-and-temp-failure") {
+        if (fails.has("adminConnect")) {
           throw new Error("simulated administrative connection failure");
         }
         return;
       }
       state.fixtureConnectAttempts += 1;
       state.fixtureConnectedDatabase = this.database;
-      if (mode === "fixture-connect" || mode === "fixture-connect-and-end") {
+      if (fails.has("fixtureConnect")) {
         throw new Error("simulated fixture connection failure");
       }
     }
@@ -60,18 +90,18 @@ function createHarness(mode) {
     async query(sql) {
       if (this.isAdmin) {
         if (sql.startsWith("select current_database(), rolcreatedb")) {
-          if (mode === "security-query-error") {
+          if (fails.has("securityQuery")) {
             throw new Error("simulated security metadata query failure");
           }
-          if (mode === "missing-security-row") return { rows: [] };
+          if (securityRow === "missing") return { rows: [] };
           const security = {
             current_database: state.sourceDatabase,
-            rolcreatedb: mode !== "missing-createdb",
+            rolcreatedb: securityRow !== "noCreatedb",
           };
-          if (mode === "missing-database-name") delete security.current_database;
-          if (mode === "missing-createdb-value") delete security.rolcreatedb;
-          if (mode === "invalid-database-name-type") security.current_database = null;
-          if (mode === "invalid-createdb-type") security.rolcreatedb = "true";
+          if (securityRow === "noDatabaseName") delete security.current_database;
+          if (securityRow === "noCreatedbValue") delete security.rolcreatedb;
+          if (securityRow === "invalidDatabaseName") security.current_database = null;
+          if (securityRow === "invalidCreatedb") security.rolcreatedb = "true";
           return {
             rows: [security],
           };
@@ -83,13 +113,7 @@ function createHarness(mode) {
         }
         if (sql.startsWith("SELECT pg_terminate_backend")) {
           state.terminateConnectionAttempts += 1;
-          if (
-            mode === "terminate-connections" ||
-            mode === "multiple-cleanup-failures" ||
-            mode === "multiple-cleanup-and-admin-end-failures" ||
-            mode === "nonzero-roster-and-multiple-cleanup-failures" ||
-            mode === "temp-config-write-and-multiple-cleanup-failures"
-          ) {
+          if (fails.has("terminateConnections")) {
             throw new Error("simulated connection termination failure");
           }
           return { rows: [] };
@@ -97,16 +121,7 @@ function createHarness(mode) {
         const drop = sql.match(/^DROP DATABASE "([^"]+)"$/);
         if (drop) {
           state.dropDatabaseAttempts += 1;
-          if (
-            mode === "drop-database" ||
-            mode === "drop-and-temp-failure" ||
-            mode === "multiple-cleanup-failures" ||
-            mode === "multiple-cleanup-and-admin-end-failures" ||
-            mode === "roster-and-drop-failure" ||
-            mode === "nonzero-roster-and-multiple-cleanup-failures" ||
-            mode === "nonzero-roster-and-drop-failure" ||
-            mode === "temp-config-write-and-multiple-cleanup-failures"
-          ) {
+          if (fails.has("dropDatabase")) {
             throw new Error("simulated database drop failure");
           }
           state.droppedDatabases.push(drop[1]);
@@ -116,19 +131,19 @@ function createHarness(mode) {
       }
 
       if (sql === "select current_database() as name") {
-        if (mode === "fixture-verification-query-error") {
+        if (fails.has("fixtureVerificationQuery")) {
           throw state.fixtureVerificationError;
         }
-        if (mode === "missing-fixture-row") return { rows: [] };
-        if (mode === "missing-fixture-database-name") return { rows: [{}] };
+        if (fixtureVerification === "missingRow") return { rows: [] };
+        if (fixtureVerification === "missingName") return { rows: [{}] };
         return {
           rows: [{
-            name: mode === "wrong-database" ? "unrelated_database" : this.database,
+            name: fixtureVerification === "wrongDatabase" ? "unrelated_database" : this.database,
           }],
         };
       }
       state.fixtureQueries.push(sql);
-      if (mode === "apply-sql" || mode === "apply-sql-and-end") {
+      if (fails.has("applySql")) {
         throw new Error("simulated fixture SQL failure");
       }
       return { rows: [] };
@@ -137,23 +152,10 @@ function createHarness(mode) {
     async end() {
       if (this.isAdmin) state.adminEnded = true;
       else state.fixtureEnded = true;
-      if (this.isAdmin && (
-        mode === "admin-end" ||
-        mode === "multiple-cleanup-and-admin-end-failures" ||
-        mode === "signal-schema-generation-and-admin-end-failure" ||
-        mode === "signal-test-process-and-admin-end-failure" ||
-        mode === "generate-schema-and-admin-end-failure" ||
-        mode === "nonzero-roster-and-admin-end-failure" ||
-        mode === "temp-directory-create-and-admin-end-failure" ||
-        mode === "temp-config-write-and-multiple-cleanup-failures"
-      )) {
+      if (this.isAdmin && fails.has("adminEnd")) {
         throw new Error("simulated administrative connection close failure");
       }
-      if (!this.isAdmin && (
-        mode === "fixture-connect-and-end" ||
-        mode === "fixture-end" ||
-        mode === "apply-sql-and-end"
-      )) {
+      if (!this.isAdmin && fails.has("fixtureEnd")) {
         throw new Error("simulated fixture connection close failure");
       }
     }
@@ -162,10 +164,7 @@ function createHarness(mode) {
   const fs = {
     mkdtemp: async (prefix) => {
       state.tempDirectoryCreationAttempts += 1;
-      if (
-        mode === "temp-directory-create" ||
-        mode === "temp-directory-create-and-admin-end-failure"
-      ) {
+      if (fails.has("tempDirectoryCreate")) {
         throw state.tempDirectoryCreationError;
       }
       const tempDir = await mkdtemp(prefix);
@@ -176,33 +175,17 @@ function createHarness(mode) {
       state.fixtureReadAttempts += 1;
       return "CREATE TABLE disposable_fixture (id integer);";
     },
-    readdir: async () => {
-      if (mode === "no-generated-migrations") return [];
-      if (mode === "multiple-generated-migrations") {
-        return ["0000_initial.sql", "0001_additional.sql"];
-      }
-      return ["0000_initial.sql"];
-    },
+    readdir: async () => migrations,
     rm: async (...args) => {
       state.tempDirectoryRemovalAttempts += 1;
-      if (
-        mode === "drop-and-temp-failure" ||
-        mode === "roster-and-temp-failure" ||
-        mode === "admin-connect-and-temp-failure" ||
-        mode === "successful-roster-and-temp-failure" ||
-        mode === "signal-schema-generation-and-temp-failure" ||
-        mode === "temp-config-write-and-multiple-cleanup-failures"
-      ) {
+      if (fails.has("tempDirectoryRemove")) {
         throw new Error("simulated temporary-directory removal failure");
       }
       return rm(...args);
     },
     writeFile: async (...args) => {
       state.tempConfigWriteAttempts += 1;
-      if (
-        mode === "temp-config-write-failure" ||
-        mode === "temp-config-write-and-multiple-cleanup-failures"
-      ) {
+      if (fails.has("tempConfigWrite")) {
         throw state.tempConfigWriteError;
       }
       return writeFile(...args);
@@ -211,55 +194,36 @@ function createHarness(mode) {
 
   const spawn = (_command, args) => {
     if (args.includes("generate")) {
-      let result;
-      if (
-        mode === "signal-schema-generation" ||
-        mode === "signal-schema-generation-and-admin-end-failure" ||
-        mode === "signal-schema-generation-and-temp-failure"
-      ) {
-        result = { status: null, signal: "SIGTERM" };
-      } else {
-        result = {
-          status:
-            mode === "generate-schema" || mode === "generate-schema-and-admin-end-failure"
-              ? 3
-              : 0,
-        };
-      }
-      state.schemaGenerationResults.push(result);
-      return result;
+      state.schemaGenerationResults.push(schemaResult);
+      return schemaResult;
     }
     state.testProcessStartAttempts += 1;
-    if (mode === "test-process-start-error") {
+    if (fails.has("testProcessStart")) {
       return { error: new Error("simulated test process start failure") };
     }
     state.runTestProcess = true;
-    if (mode === "roster-and-drop-failure" || mode === "roster-and-temp-failure") {
+    if (fails.has("testProcessThrow")) {
       throw new Error("simulated roster test execution failure");
     }
-    if (mode === "signal-test-process" || mode === "signal-test-process-and-admin-end-failure") {
-      return { status: null, signal: "SIGTERM" };
-    }
-    return {
-      status:
-        mode === "run-tests" ||
-        mode === "nonzero-roster-and-drop-failure" ||
-        mode === "nonzero-roster-and-multiple-cleanup-failures" ||
-        mode === "nonzero-roster-and-admin-end-failure"
-          ? 7
-          : 0,
-    };
+    return testResult;
   };
 
   const bundle = async () => {
     state.bundleAttempts += 1;
-    if (mode === "bundle-error") {
+    if (fails.has("bundle")) {
       throw new Error("simulated roster test bundle failure");
     }
   };
 
   return { state, FakeClient, fs, spawn, bundle };
 }
+
+test("unknown failure steps are rejected rather than silently succeeding", () => {
+  assert.throws(
+    () => createHarness({ fail: ["dropDatabse"] }),
+    /Unknown simulated failure step: dropDatabse/,
+  );
+});
 
 async function assertResourcesRemoved(state) {
   assert.equal(state.createdDatabases.length, 1, "a fresh disposable database was created");
@@ -318,7 +282,7 @@ async function assertSecurityCheckCleanup(harness) {
 }
 
 test("temporary-directory creation failure closes the admin client without starting tests", async () => {
-  const harness = createHarness("temp-directory-create");
+  const harness = createHarness({ fail: ["tempDirectoryCreate"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.equal(error, harness.state.tempDirectoryCreationError);
@@ -339,7 +303,7 @@ test("temporary-directory creation failure closes the admin client without start
 });
 
 test("temporary-directory creation error remains primary when closing admin also fails", async () => {
-  const harness = createHarness("temp-directory-create-and-admin-end-failure");
+  const harness = createHarness({ fail: ["tempDirectoryCreate", "adminEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -364,7 +328,7 @@ test("temporary-directory creation error remains primary when closing admin also
 });
 
 test("temporary config write failure removes the disposable database and all temporary resources", async () => {
-  const harness = createHarness("temp-config-write-failure");
+  const harness = createHarness({ fail: ["tempConfigWrite"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.equal(error, harness.state.tempConfigWriteError);
@@ -386,7 +350,9 @@ test("temporary config write failure removes the disposable database and all tem
 });
 
 test("temporary config write error remains primary when every cleanup step also fails", async () => {
-  const harness = createHarness("temp-config-write-and-multiple-cleanup-failures");
+  const harness = createHarness({
+    fail: ["tempConfigWrite", "terminateConnections", "dropDatabase", "adminEnd", "tempDirectoryRemove"],
+  });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -424,7 +390,7 @@ test("temporary config write error remains primary when every cleanup step also 
 });
 
 test("schema generation failure removes the generated database and temporary files", async () => {
-  const harness = createHarness("generate-schema");
+  const harness = createHarness({ schemaResult: { status: 3 } });
 
   await assert.rejects(runWith(harness), /Failed to generate the application schema/);
 
@@ -435,7 +401,7 @@ test("schema generation failure removes the generated database and temporary fil
 });
 
 test("schema generation exit failure remains visible when the admin connection cannot close", async () => {
-  const harness = createHarness("generate-schema-and-admin-end-failure");
+  const harness = createHarness({ schemaResult: { status: 3 }, fail: ["adminEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -457,17 +423,17 @@ test("schema generation exit failure remains visible when the admin connection c
 });
 
 test("empty generated migration listing stops before fixtures and removes resources", async () => {
-  await assertInvalidMigrationListingStopsBeforeFixtures(createHarness("no-generated-migrations"));
+  await assertInvalidMigrationListingStopsBeforeFixtures(createHarness({ migrations: [] }));
 });
 
 test("multiple generated migrations stop before fixtures and remove resources", async () => {
   await assertInvalidMigrationListingStopsBeforeFixtures(
-    createHarness("multiple-generated-migrations"),
+    createHarness({ migrations: ["0000_initial.sql", "0001_additional.sql"] }),
   );
 });
 
 test("schema generation interruption identifies the signal and removes resources", async () => {
-  const harness = createHarness("signal-schema-generation");
+  const harness = createHarness({ schemaResult: { status: null, signal: "SIGTERM" } });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.match(error.message, /schema generation was terminated by signal SIGTERM/);
@@ -483,7 +449,10 @@ test("schema generation interruption identifies the signal and removes resources
 });
 
 test("schema generation interruption remains visible when the administrative connection cannot close", async () => {
-  const harness = createHarness("signal-schema-generation-and-admin-end-failure");
+  const harness = createHarness({
+    schemaResult: { status: null, signal: "SIGTERM" },
+    fail: ["adminEnd"],
+  });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -513,7 +482,10 @@ test("schema generation interruption remains visible when the administrative con
 });
 
 test("schema generation interruption and temporary-directory cleanup failures remain visible", async () => {
-  const harness = createHarness("signal-schema-generation-and-temp-failure");
+  const harness = createHarness({
+    schemaResult: { status: null, signal: "SIGTERM" },
+    fail: ["tempDirectoryRemove"],
+  });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -545,7 +517,7 @@ test("schema generation interruption and temporary-directory cleanup failures re
 });
 
 test("administrative connection failure closes the client and removes temporary files", async () => {
-  const harness = createHarness("admin-connect");
+  const harness = createHarness({ fail: ["adminConnect"] });
 
   await assert.rejects(runWith(harness), /simulated administrative connection failure/);
 
@@ -559,7 +531,7 @@ test("administrative connection failure closes the client and removes temporary 
 });
 
 test("administrative connection failure remains visible when temporary-directory cleanup fails", async () => {
-  const harness = createHarness("admin-connect-and-temp-failure");
+  const harness = createHarness({ fail: ["adminConnect", "tempDirectoryRemove"] });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -585,7 +557,7 @@ test("administrative connection failure remains visible when temporary-directory
 });
 
 test("SQL application failure removes the generated database and temporary files", async () => {
-  const harness = createHarness("apply-sql");
+  const harness = createHarness({ fail: ["applySql"] });
 
   await assert.rejects(runWith(harness), /simulated fixture SQL failure/);
 
@@ -596,7 +568,7 @@ test("SQL application failure removes the generated database and temporary files
 });
 
 test("fixture connection failure removes the generated database and temporary files", async () => {
-  const harness = createHarness("fixture-connect");
+  const harness = createHarness({ fail: ["fixtureConnect"] });
 
   await assert.rejects(runWith(harness), /simulated fixture connection failure/);
 
@@ -608,7 +580,7 @@ test("fixture connection failure removes the generated database and temporary fi
 });
 
 test("fixture database-verification query failure blocks fixture SQL and removes resources", async () => {
-  const harness = createHarness("fixture-verification-query-error");
+  const harness = createHarness({ fail: ["fixtureVerificationQuery"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.equal(error, harness.state.fixtureVerificationError);
@@ -627,7 +599,7 @@ test("fixture database-verification query failure blocks fixture SQL and removes
 });
 
 test("fixture setup and close failures are both reported before administrative cleanup", async () => {
-  const harness = createHarness("fixture-connect-and-end");
+  const harness = createHarness({ fail: ["fixtureConnect", "fixtureEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -650,7 +622,7 @@ test("fixture setup and close failures are both reported before administrative c
 });
 
 test("fixture SQL and close failures are both reported before administrative cleanup", async () => {
-  const harness = createHarness("apply-sql-and-end");
+  const harness = createHarness({ fail: ["applySql", "fixtureEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -679,7 +651,7 @@ test("fixture SQL and close failures are both reported before administrative cle
 });
 
 test("fixture close failure after successful SQL application stops roster tests and cleans up", async () => {
-  const harness = createHarness("fixture-end");
+  const harness = createHarness({ fail: ["fixtureEnd"] });
 
   await assert.rejects(runWith(harness), /simulated fixture connection close failure/);
 
@@ -696,7 +668,7 @@ test("fixture close failure after successful SQL application stops roster tests 
 });
 
 test("test process failure removes the generated database and temporary files", async () => {
-  const harness = createHarness("run-tests");
+  const harness = createHarness({ testResult: { status: 7 } });
 
   assert.equal(await runWith(harness), 7);
 
@@ -706,7 +678,7 @@ test("test process failure removes the generated database and temporary files", 
 });
 
 test("successful schema generation runs tests and removes all resources", async () => {
-  const harness = createHarness("successful-test-process");
+  const harness = createHarness();
 
   assert.equal(await runWith(harness), 0);
 
@@ -716,7 +688,7 @@ test("successful schema generation runs tests and removes all resources", async 
 });
 
 test("successful roster tests report temporary-directory cleanup failure", async () => {
-  const harness = createHarness("successful-roster-and-temp-failure");
+  const harness = createHarness({ fail: ["tempDirectoryRemove"] });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -741,7 +713,7 @@ test("successful roster tests report temporary-directory cleanup failure", async
 });
 
 test("a conflicting source database query option cannot redirect fixture setup", async () => {
-  const harness = createHarness("successful-test-process");
+  const harness = createHarness();
   const conflictingDatabase = "database_from_query_option";
 
   assert.equal(
@@ -767,7 +739,7 @@ test("a conflicting source database query option cannot redirect fixture setup",
 });
 
 test("test process signal is reported with a nonzero exit code and all resources removed", async () => {
-  const harness = createHarness("signal-test-process");
+  const harness = createHarness({ testResult: { status: null, signal: "SIGTERM" } });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.match(error.message, /terminated by signal SIGTERM/);
@@ -781,7 +753,10 @@ test("test process signal is reported with a nonzero exit code and all resources
 });
 
 test("test process interruption remains visible when the administrative connection cannot close", async () => {
-  const harness = createHarness("signal-test-process-and-admin-end-failure");
+  const harness = createHarness({
+    testResult: { status: null, signal: "SIGTERM" },
+    fail: ["adminEnd"],
+  });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -803,7 +778,7 @@ test("test process interruption remains visible when the administrative connecti
 });
 
 test("test bundling failure prevents process start and removes all resources", async () => {
-  const harness = createHarness("bundle-error");
+  const harness = createHarness({ fail: ["bundle"] });
 
   await assert.rejects(runWith(harness), /simulated roster test bundle failure/);
 
@@ -814,7 +789,7 @@ test("test bundling failure prevents process start and removes all resources", a
 });
 
 test("test process start failure is reported and removes all resources", async () => {
-  const harness = createHarness("test-process-start-error");
+  const harness = createHarness({ fail: ["testProcessStart"] });
 
   await assert.rejects(runWith(harness), /simulated test process start failure/);
 
@@ -825,7 +800,7 @@ test("test process start failure is reported and removes all resources", async (
 });
 
 test("roster test failure remains visible when administrative cleanup also fails", async () => {
-  const harness = createHarness("roster-and-drop-failure");
+  const harness = createHarness({ fail: ["testProcessThrow", "dropDatabase"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -845,7 +820,7 @@ test("roster test failure remains visible when administrative cleanup also fails
 });
 
 test("roster test failure remains visible when temporary-directory cleanup also fails", async () => {
-  const harness = createHarness("roster-and-temp-failure");
+  const harness = createHarness({ fail: ["testProcessThrow", "tempDirectoryRemove"] });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -872,7 +847,10 @@ test("roster test failure remains visible when temporary-directory cleanup also 
 });
 
 test("nonzero roster test status and every administrative cleanup failure remain visible", async () => {
-  const harness = createHarness("nonzero-roster-and-multiple-cleanup-failures");
+  const harness = createHarness({
+    testResult: { status: 7 },
+    fail: ["terminateConnections", "dropDatabase"],
+  });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -898,7 +876,7 @@ test("nonzero roster test status and every administrative cleanup failure remain
 });
 
 test("nonzero roster test status remains visible when administrative cleanup fails", async () => {
-  const harness = createHarness("nonzero-roster-and-drop-failure");
+  const harness = createHarness({ testResult: { status: 7 }, fail: ["dropDatabase"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -916,7 +894,7 @@ test("nonzero roster test status remains visible when administrative cleanup fai
 });
 
 test("nonzero roster test status remains visible when the administrative connection cannot close", async () => {
-  const harness = createHarness("nonzero-roster-and-admin-end-failure");
+  const harness = createHarness({ testResult: { status: 7 }, fail: ["adminEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -937,7 +915,7 @@ test("nonzero roster test status remains visible when the administrative connect
 });
 
 test("temporary files are removed when terminating database connections fails", async () => {
-  const harness = createHarness("terminate-connections");
+  const harness = createHarness({ fail: ["terminateConnections"] });
 
   await assert.rejects(runWith(harness), /simulated connection termination failure/);
 
@@ -946,7 +924,7 @@ test("temporary files are removed when terminating database connections fails", 
 });
 
 test("all administrative cleanup failures are reported and remaining cleanup is attempted", async () => {
-  const harness = createHarness("multiple-cleanup-failures");
+  const harness = createHarness({ fail: ["terminateConnections", "dropDatabase"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -965,7 +943,7 @@ test("all administrative cleanup failures are reported and remaining cleanup is 
 });
 
 test("termination, database removal, and admin close failures all remain visible", async () => {
-  const harness = createHarness("multiple-cleanup-and-admin-end-failures");
+  const harness = createHarness({ fail: ["terminateConnections", "dropDatabase", "adminEnd"] });
 
   await assert.rejects(runWith(harness), (error) => {
     assert.ok(error instanceof AggregateError);
@@ -988,7 +966,7 @@ test("termination, database removal, and admin close failures all remain visible
 });
 
 test("database and temporary-directory cleanup failures are both reported", async () => {
-  const harness = createHarness("drop-and-temp-failure");
+  const harness = createHarness({ fail: ["dropDatabase", "tempDirectoryRemove"] });
 
   try {
     await assert.rejects(runWith(harness), (error) => {
@@ -1013,7 +991,7 @@ test("database and temporary-directory cleanup failures are both reported", asyn
 });
 
 test("administrative connection and temporary files are cleaned when dropping the database fails", async () => {
-  const harness = createHarness("drop-database");
+  const harness = createHarness({ fail: ["dropDatabase"] });
 
   await assert.rejects(runWith(harness), /simulated database drop failure/);
 
@@ -1025,7 +1003,7 @@ test("administrative connection and temporary files are cleaned when dropping th
 });
 
 test("temporary files are removed and admin close failures are reported", async () => {
-  const harness = createHarness("admin-end");
+  const harness = createHarness({ fail: ["adminEnd"] });
 
   await assert.rejects(runWith(harness), /simulated administrative connection close failure/);
 
@@ -1036,7 +1014,7 @@ test("temporary files are removed and admin close failures are reported", async 
 });
 
 test("a fixture connection to another database is rejected before fixture SQL runs", async () => {
-  const harness = createHarness("wrong-database");
+  const harness = createHarness({ fixtureVerification: "wrongDatabase" });
 
   await assert.rejects(runWith(harness), /Refusing to apply fixtures outside the generated test database/);
 
@@ -1046,12 +1024,12 @@ test("a fixture connection to another database is rejected before fixture SQL ru
   await assertResourcesRemoved(harness.state);
 });
 
-for (const [mode, description] of [
-  ["missing-fixture-row", "empty fixture database-verification results"],
-  ["missing-fixture-database-name", "fixture verification rows without a database name"],
+for (const [fixtureVerification, description] of [
+  ["missingRow", "empty fixture database-verification results"],
+  ["missingName", "fixture verification rows without a database name"],
 ]) {
   test(`${description} are rejected before fixture SQL runs`, async () => {
-    const harness = createHarness(mode);
+    const harness = createHarness({ fixtureVerification });
 
     await assert.rejects(
       runWith(harness),
@@ -1069,7 +1047,7 @@ for (const [mode, description] of [
 }
 
 test("a missing database URL is rejected before opening a client or creating resources", async () => {
-  const harness = createHarness("safe");
+  const harness = createHarness();
 
   await assert.rejects(
     runWith(harness, { DATABASE_URL: undefined }),
@@ -1080,7 +1058,7 @@ test("a missing database URL is rejected before opening a client or creating res
 });
 
 test("production mode is rejected before opening a client or creating resources", async () => {
-  const harness = createHarness("safe");
+  const harness = createHarness();
 
   await assert.rejects(
     runWith(harness, { NODE_ENV: "production" }),
@@ -1091,7 +1069,7 @@ test("production mode is rejected before opening a client or creating resources"
 });
 
 test("deployment mode is rejected before opening a client or creating resources", async () => {
-  const harness = createHarness("safe");
+  const harness = createHarness();
 
   await assert.rejects(
     runWith(harness, { REPLIT_DEPLOYMENT: "1" }),
@@ -1102,7 +1080,7 @@ test("deployment mode is rejected before opening a client or creating resources"
 });
 
 test("a source database already named as a test database is rejected before creating another database", async () => {
-  const harness = createHarness("test-database-source");
+  const harness = createHarness({ sourceDatabase: "roster_test_existing" });
 
   await assert.rejects(
     runWith(harness),
@@ -1118,7 +1096,7 @@ test("a source database already named as a test database is rejected before crea
 
 
 test("a source user without CREATEDB is rejected before creating a database or applying fixtures", async () => {
-  const harness = createHarness("missing-createdb");
+  const harness = createHarness({ securityRow: "noCreatedb" });
 
   await assert.rejects(
     runWith(harness),
@@ -1133,7 +1111,7 @@ test("a source user without CREATEDB is rejected before creating a database or a
 });
 
 test("an empty source security query is rejected without creating a database or applying fixtures", async () => {
-  const harness = createHarness("missing-security-row");
+  const harness = createHarness({ securityRow: "missing" });
 
   await assert.rejects(
     runWith(harness),
@@ -1144,21 +1122,21 @@ test("an empty source security query is rejected without creating a database or 
 });
 
 test("a failed source security query is rejected without creating a database or applying fixtures", async () => {
-  const harness = createHarness("security-query-error");
+  const harness = createHarness({ fail: ["securityQuery"] });
 
   await assert.rejects(runWith(harness), /simulated security metadata query failure/);
 
   await assertSecurityCheckCleanup(harness);
 });
 
-for (const [mode, description] of [
-  ["missing-database-name", "a missing database name"],
-  ["missing-createdb-value", "a missing CREATEDB value"],
-  ["invalid-database-name-type", "a database name with an unexpected type"],
-  ["invalid-createdb-type", "a CREATEDB value with an unexpected type"],
+for (const [securityRow, description] of [
+  ["noDatabaseName", "a missing database name"],
+  ["noCreatedbValue", "a missing CREATEDB value"],
+  ["invalidDatabaseName", "a database name with an unexpected type"],
+  ["invalidCreatedb", "a CREATEDB value with an unexpected type"],
 ]) {
   test(`a source security row with ${description} is rejected and cleaned up`, async () => {
-    const harness = createHarness(mode);
+    const harness = createHarness({ securityRow });
 
     await assert.rejects(
       runWith(harness),
