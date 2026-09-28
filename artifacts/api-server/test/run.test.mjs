@@ -182,7 +182,8 @@ function createHarness(mode) {
         mode === "drop-and-temp-failure" ||
         mode === "roster-and-temp-failure" ||
         mode === "admin-connect-and-temp-failure" ||
-        mode === "successful-roster-and-temp-failure"
+        mode === "successful-roster-and-temp-failure" ||
+        mode === "signal-schema-generation-and-temp-failure"
       ) {
         throw new Error("simulated temporary-directory removal failure");
       }
@@ -202,7 +203,8 @@ function createHarness(mode) {
       let result;
       if (
         mode === "signal-schema-generation" ||
-        mode === "signal-schema-generation-and-admin-end-failure"
+        mode === "signal-schema-generation-and-admin-end-failure" ||
+        mode === "signal-schema-generation-and-temp-failure"
       ) {
         result = { status: null, signal: "SIGTERM" };
       } else {
@@ -459,6 +461,38 @@ test("schema generation interruption remains visible when the administrative con
   assert.equal(harness.state.adminEnded, true, "the administrative connection close was attempted");
   assert.equal(harness.state.tempDirectories.length, 1);
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("schema generation interruption and temporary-directory cleanup failures remain visible", async () => {
+  const harness = createHarness("signal-schema-generation-and-temp-failure");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 2);
+      assert.equal(error.cause, error.errors[0]);
+      assert.match(error.cause.message, /schema generation was terminated by signal SIGTERM/);
+      assert.equal(error.cause.signal, "SIGTERM");
+      assert.equal(error.cause.exitCode, 1);
+      assert.match(error.errors[1].message, /simulated temporary-directory removal failure/);
+      return true;
+    });
+
+    assert.deepEqual(harness.state.schemaGenerationResults, [{ status: null, signal: "SIGTERM" }]);
+    assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+    assert.equal(harness.state.runTestProcess, false, "roster tests did not start");
+    assert.equal(harness.state.terminateConnectionAttempts, 1, "database connections were terminated");
+    assert.equal(harness.state.dropDatabaseAttempts, 1, "the disposable database drop was attempted");
+    assert.deepEqual(harness.state.droppedDatabases, harness.state.createdDatabases);
+    assert.equal(harness.state.adminEnded, true, "administrative close was attempted");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+    assert.equal(harness.state.tempDirectories.length, 1);
+    await access(harness.state.tempDirectories[0]);
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("administrative connection failure closes the client and removes temporary files", async () => {
