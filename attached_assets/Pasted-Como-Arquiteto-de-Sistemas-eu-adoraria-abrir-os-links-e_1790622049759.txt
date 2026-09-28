@@ -1,0 +1,51 @@
+Como Arquiteto de Sistemas, eu adoraria abrir os links e analisar os repositórios diretamente, mas não possuo capacidade de navegação web externa para ler o conteúdo dos seus links do Replit e do GitHub.
+
+No entanto, no paradigma de *Vibe Coding*, o Replit Agent possui visão completa e opera em um ambiente de "caixa de vidro" (*glass box environment*) onde todo o código-fonte, configurações e árvore de diretórios ficam transparentes para ele. Como seu Tech Lead, oriento que usemos o próprio agente para realizar essa auditoria técnica profunda e extrair o "raio-x" do projeto.
+
+Para garantir que o agente apenas analise o código do "Hub de Mentorias" sem realizar nenhuma alteração ou gerar regressões indesejadas, utilizaremos o **Plan Mode (Modo de Planejamento)**. Neste modo, ele atuará unicamente como nosso analista, varrendo a estrutura e gerando um relatório sem modificar o código-fonte ou consumir créditos de construção.
+
+---
+
+### Comando para colar no chat do Replit Agent
+
+Certifique-se de que o botão **Plan** (Planejamento) esteja ativado no chat do Replit Agent e cole o Meta-Prompt abaixo:
+
+```markdown
+### SOLICITAÇÃO DE AUDITORIA ARQUITETURAL E MAPEAMENTO DE CÓDIGO (PLAN MODE)
+
+#### 1. OBJETIVO DA AUDITORIA
+Realizar uma varredura completa na base de código atual deste projeto (Hub de Mentorias) para mapear a arquitetura existente, identificar o estado do banco de dados e diagnosticar o nível de maturidade da aplicação, sem alterar nenhum arquivo de código.
+
+#### 2. DIRETRIZES DE ANÁLISE
+Como agente autônomo, leia a árvore de diretórios e os arquivos principais para mapear:
+* **Stack Atual:** Leia o `package.json` ou arquivos de configuração equivalentes para identificar as bibliotecas de Frontend, Backend e ORM.
+* **Banco de Dados:** Inspecione o schema do banco (ex.: `db/schema.ts` ou equivalentes) para listar as entidades, tabelas físicas, relacionamentos e o uso de validações Zod.
+* **Governança:** Verifique se existe um arquivo `replit.md` na raiz ditando as regras e diretrizes de projeto.
+
+#### 3. ENTREGÁVEL ESPERADO
+Gere um relatório detalhado aqui no chat contendo:
+1. **Stack Técnica Identificada:** Resumo preciso das tecnologias atualmente instaladas.
+2. **Modelagem de Dados Atual:** Lista das entidades/tabelas que já foram modeladas.
+3. **Diagnóstico de Riscos:** Identificação de falhas estruturais visíveis (ex.: múltiplos lockfiles conflitantes como yarn.lock/pnpm-lock, falta de tipagem Zod, banco de dados não inicializado).
+4. **Alinhamento Arquitetural:** Com base no que foi lido, quais seriam os passos lógicos necessários para estabilizar o sistema antes de focar na interface visual?
+
+#### 4. RESTRIÇÕES DE ESCOPO MÁXIMAS
+* NÃO escreva, modifique ou exclua nenhuma linha de código.
+* NÃO instale novos pacotes ou dependências.
+* NÃO execute migrações de banco de dados.
+* Seu papel nesta solicitação é estritamente de leitura, diagnóstico e reporte.
+
+```
+
+---
+
+### Checklist de Validação Visual
+
+Após o Replit Agent entregar o relatório, faça estas duas conferências simples:
+
+1. **Respeito às restrições:** Confirme se o agente apenas gerou o texto no chat, sem tentar abrir terminais, rodar comandos ou instalar pacotes sozinho.
+
+
+2. **Coerência da análise:** Avalie se as ferramentas e tabelas mencionadas batem com o propósito original do seu repositório de Mentorias.
+
+Copie e cole a resposta do agente aqui. Com essa radiografia em mãos, nós construiremos o plano mestre e o arquivo `replit.md` para estabilizarmos esse projeto antes de avançar.
