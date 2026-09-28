@@ -299,6 +299,77 @@ test("a changed legacy team or session field preserves every roster table", asyn
   });
 });
 
+test("a failed official roster insert rolls back the complete legacy replacement", async () => {
+  await clearRosterTables();
+  let triggerCreated = false;
+  let functionCreated = false;
+  try {
+    const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+      "SELECT current_database() AS name",
+    );
+    assert.match(databaseName, /^roster_test_/, "this failure test must use run.mjs's disposable database");
+
+    const legacy = await insertLegacyDemo();
+    const beforeSeed = await rosterSnapshot();
+    assert.equal(beforeSeed.mentors.length, legacyDemoMentors.length);
+    assert.equal(beforeSeed.teams.length, legacyDemoTeams.length);
+    assert.equal(beforeSeed.students.length, 0);
+    assert.equal(beforeSeed.sessions.length, legacyDemoTeams.length * 3);
+
+    await pool.query(`
+      CREATE FUNCTION roster_test_fail_official_student_insert()
+      RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF NEW.sort_order = 1 THEN
+          RAISE EXCEPTION 'simulated official roster insert failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$
+    `);
+    functionCreated = true;
+    await pool.query(`
+      CREATE TRIGGER roster_test_fail_official_student_insert
+      BEFORE INSERT ON students
+      FOR EACH ROW
+      EXECUTE FUNCTION roster_test_fail_official_student_insert()
+    `);
+    triggerCreated = true;
+
+    await assert.rejects(seedDatabase(), (error: unknown) => {
+      let cause = error;
+      while (cause instanceof Error) {
+        if (cause.message.includes("simulated official roster insert failure")) return true;
+        cause = cause.cause;
+      }
+      return false;
+    });
+
+    const afterFailure = await rosterSnapshot();
+    assert.deepEqual(afterFailure, beforeSeed, "all legacy mentors, teams and sessions must survive");
+    assert.deepEqual(afterFailure.mentors, legacy.mentors);
+    assert.deepEqual(afterFailure.teams, legacy.teams);
+    assert.deepEqual(afterFailure.sessions, legacy.sessions);
+    assert.deepEqual(afterFailure.students, [], "no students from a partial official roster may remain");
+    assert.equal(afterFailure.mentors.some(({ name }) =>
+      officialTeams.some(({ mentor }) => mentor === name)
+    ), false, "official mentors inserted before the failure must be rolled back");
+    assert.equal(afterFailure.teams.some(({ name }) =>
+      officialTeams.some(({ name: officialName }) => officialName === name)
+    ), false, "official teams inserted before the failure must be rolled back");
+  } finally {
+    if (triggerCreated) {
+      await pool.query("DROP TRIGGER roster_test_fail_official_student_insert ON students");
+    }
+    if (functionCreated) {
+      await pool.query("DROP FUNCTION roster_test_fail_official_student_insert()");
+    }
+    await clearRosterTables();
+  }
+});
+
 test("official document, seed and API agree on every mentor, team, student and order", async () => {
   const expected = await officialRoster();
   assert.deepEqual(officialTeams.map(({ name, mentor, students }) => ({
