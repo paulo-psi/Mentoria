@@ -253,7 +253,7 @@ async function assertLegacyDataPreservedAfterChange(
     assert.deepEqual(
       await rosterSnapshot(),
       beforeSeed,
-      "a changed legacy field must preserve mentors, teams, students and sessions",
+      "a changed legacy roster must preserve mentors, teams, students and sessions",
     );
   } finally {
     await clearRosterTables();
@@ -417,6 +417,27 @@ test("a changed legacy team or session signature field preserves every roster ta
   for (const [name, change] of sessionChanges) {
     await t.test(name, async () => assertLegacyDataPreservedAfterChange(change));
   }
+});
+
+test("adding or removing a legacy session preserves every roster table on startup", async (t) => {
+  await t.test("one new session", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ sessions }) => {
+      const { id: _id, createdAt: _createdAt, ...session } = sessions[0];
+      await db.insert(mentoringSessionsTable).values({
+        ...session,
+        sessionDate: "2025-02-01",
+        agreedNextSteps: "Registrar os resultados da nova sessão.",
+      });
+      assert.equal((await db.select().from(mentoringSessionsTable)).length, sessions.length + 1);
+    });
+  });
+
+  await t.test("one removed session", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ sessions }) => {
+      await db.delete(mentoringSessionsTable).where(eq(mentoringSessionsTable.id, sessions[0].id));
+      assert.equal((await db.select().from(mentoringSessionsTable)).length, sessions.length - 1);
+    });
+  });
 });
 
 test("a changed legacy mentor or team signature field preserves every roster table", async (t) => {
