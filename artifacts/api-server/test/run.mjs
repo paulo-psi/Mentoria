@@ -103,8 +103,14 @@ export default { ...config, out: ${JSON.stringify(migrationsDir)} };
     let fixtureError;
     try {
       await fixture.connect();
-      const { rows: [{ name }] } = await fixture.query("select current_database() as name");
-      if (name !== databaseName) throw new Error("Refusing to apply fixtures outside the generated test database.");
+      const databaseCheck = await fixture.query("select current_database() as name");
+      const connectedDatabase = databaseCheck?.rows?.[0]?.name;
+      if (
+        typeof connectedDatabase !== "string" ||
+        connectedDatabase !== databaseName
+      ) {
+        throw new Error("Refusing to apply fixtures outside the generated test database.");
+      }
       await fixture.query(await fs.readFile(path.join(migrationsDir, migrations[0]), "utf8"));
     } catch (error) {
       fixtureError = error;

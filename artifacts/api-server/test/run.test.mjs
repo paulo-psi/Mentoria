@@ -111,6 +111,8 @@ function createHarness(mode) {
       }
 
       if (sql === "select current_database() as name") {
+        if (mode === "missing-fixture-row") return { rows: [] };
+        if (mode === "missing-fixture-database-name") return { rows: [{}] };
         return {
           rows: [{
             name: mode === "wrong-database" ? "unrelated_database" : this.database,
@@ -857,6 +859,28 @@ test("a fixture connection to another database is rejected before fixture SQL ru
   assert.equal(harness.state.runTestProcess, false);
   await assertResourcesRemoved(harness.state);
 });
+
+for (const [mode, description] of [
+  ["missing-fixture-row", "empty fixture database-verification results"],
+  ["missing-fixture-database-name", "fixture verification rows without a database name"],
+]) {
+  test(`${description} are rejected before fixture SQL runs`, async () => {
+    const harness = createHarness(mode);
+
+    await assert.rejects(
+      runWith(harness),
+      /Refusing to apply fixtures outside the generated test database/,
+    );
+
+    assert.equal(harness.state.fixtureConnectAttempts, 1, "the fixture connection was opened");
+    assert.equal(harness.state.fixtureQueries.length, 0, "fixture SQL was not applied");
+    assert.equal(harness.state.fixtureEnded, true, "the fixture connection was closed");
+    assert.equal(harness.state.bundleAttempts, 0, "roster tests were not bundled");
+    assert.equal(harness.state.testProcessStartAttempts, 0, "roster tests did not start");
+    assert.equal(harness.state.runTestProcess, false, "roster tests did not run");
+    await assertResourcesRemoved(harness.state);
+  });
+}
 
 test("a missing database URL is rejected before opening a client or creating resources", async () => {
   const harness = createHarness("safe");
