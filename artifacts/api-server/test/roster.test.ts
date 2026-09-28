@@ -243,16 +243,7 @@ type Team =
 }
 ;
 
-  students: 
-{
- id: number
-;
- name: string
-;
- sortOrder: number 
-}
-[]
-;
+  students: Array<{ id: number; name: string; sortOrder: number }>;
 
   sessionCount: number
 ;
@@ -306,11 +297,7 @@ async function request(
   assert.ok(!text || response.headers.get("content-type")?.includes("application/json"), `${method} ${path}: ${response.status} ${text.slice(0, 500)}`)
 ;
 
-  return 
-{
- status: response.status, body: text ? JSON.parse(text) : null 
-}
-;
+  return { status: response.status, body: text ? JSON.parse(text) : null };
 
 }
 
@@ -333,23 +320,11 @@ async function teams(): Promise<Team[]>
 function confirmation(team: Team) 
 {
 
-  return 
-{
-
+  return {
     expectedName: team.name,
     expectedMainMentorId: team.mainMentor.id,
-    expectedStudents: team.students.map((
-{
- id, name, sortOrder 
-}
-) => (
-{
- id, name, sortOrder 
-}
-)),
-  
-}
-;
+    expectedStudents: team.students.map(({ id, name, sortOrder }) => ({ id, name, sortOrder })),
+  };
 
 }
 
@@ -791,11 +766,7 @@ async function insertLegacyDemo(
     : []
 ;
 
-  return 
-{
- mentors, teams, students, sessions 
-}
-;
+  return { mentors, teams, students, sessions };
 
 }
 
@@ -810,16 +781,12 @@ async function rosterSnapshot()
 >(rows: T[]) => rows.sort((a, b) => a.id - b.id)
 ;
 
-  return 
-{
-
+  return {
     mentors: byId(await db.select().from(mentorsTable)),
     teams: byId(await db.select().from(teamsTable)),
     students: byId(await db.select().from(studentsTable)),
     sessions: byId(await db.select().from(mentoringSessionsTable)),
-  
-}
-;
+  };
 
 }
 
@@ -2442,6 +2409,60 @@ test("a deleted official session stays deleted after startup seeding", async () 
 }
 )
 ;
+
+
+test("deleting every official session leaves the session list empty after startup seeding", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "deleting all sessions must use the disposable test database");
+
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(
+      official.students.length,
+      officialTeams.reduce((total, team) => total + team.students.length, 0),
+    );
+    assert.deepEqual(official.sessions, []);
+
+    const firstSession = await insertOfficialPrincipalSession(official, "2026-03-21");
+    const secondSession = await insertOfficialPrincipalSession(official, "2026-03-28");
+    assert.notEqual(firstSession.id, secondSession.id);
+
+    const deleted = await db.delete(mentoringSessionsTable)
+      .where(eq(mentoringSessionsTable.teamId, firstSession.teamId))
+      .returning();
+    assert.deepEqual(
+      deleted.map(({ id }) => id).sort((a, b) => a - b),
+      [firstSession.id, secondSession.id].sort((a, b) => a - b),
+      "both official sessions must be deleted",
+    );
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, []);
+
+    await seedDatabase();
+    const afterSeed = await rosterSnapshot();
+    assert.deepEqual(
+      afterSeed,
+      beforeSeed,
+      "startup must preserve mentors, teams and students without recreating deleted sessions",
+    );
+    assert.deepEqual(afterSeed.sessions, [], "startup must not recreate sessions after the last ones are deleted");
+  } finally {
+    await clearRosterTables();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      { mentors: [], teams: [], students: [], sessions: [] },
+      "test cleanup must remove every row it created",
+    );
+  }
+});
 
 
 test("administrators can record a transversal session and startup preserves it", async () => 
