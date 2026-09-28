@@ -272,6 +272,34 @@ async function rosterSnapshot() {
   };
 }
 
+async function insertOfficialPrincipalSession(
+  official: Awaited<ReturnType<typeof rosterSnapshot>>,
+  sessionDate: string,
+) {
+  const team = official.teams.find(({ name }) => name === officialTeams[0].name);
+  const mentor = official.mentors.find(({ name }) => name === officialTeams[0].mentor);
+  assert.ok(team);
+  assert.ok(mentor);
+  assert.equal(team.mainMentorId, mentor.id);
+
+  const [session] = await db.insert(mentoringSessionsTable).values({
+    teamId: team.id,
+    mentorId: mentor.id,
+    sessionType: "principal",
+    sessionDate,
+    teamNps: 9,
+    teamActionability: 8,
+    mentorCommitment: 9,
+    mentorTraction: 7,
+    teamFeedbackStrongPoints: "Boa colaboração",
+    teamFeedbackImprovements: "Aprimorar o planejamento",
+    agreedNextSteps: "Revisar o próximo ciclo",
+    mentorQualitativeAssessment: "Evolução consistente",
+  }).returning();
+  assert.ok(session);
+  return session;
+}
+
 async function assertLegacyDataPreservedAfterChange(
   change: (legacy: Awaited<ReturnType<typeof insertLegacyDemo>>) => Promise<unknown>,
 ) {
@@ -664,25 +692,7 @@ test("a newly recorded official session survives startup seeding", async () => {
     assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
     assert.deepEqual(official.sessions, []);
 
-    const team = official.teams.find(({ name }) => name === officialTeams[0].name);
-    const mentor = official.mentors.find(({ name }) => name === officialTeams[0].mentor);
-    assert.ok(team);
-    assert.ok(mentor);
-    assert.equal(team.mainMentorId, mentor.id);
-    const [session] = await db.insert(mentoringSessionsTable).values({
-      teamId: team.id,
-      mentorId: mentor.id,
-      sessionType: "principal",
-      sessionDate: "2026-03-01",
-      teamNps: 9,
-      teamActionability: 8,
-      mentorCommitment: 9,
-      mentorTraction: 7,
-      teamFeedbackStrongPoints: "Boa colaboração",
-      teamFeedbackImprovements: "Aprimorar o planejamento",
-      agreedNextSteps: "Revisar o próximo ciclo",
-      mentorQualitativeAssessment: "Evolução consistente",
-    }).returning();
+    const session = await insertOfficialPrincipalSession(official, "2026-03-01");
 
     const beforeSeed = await rosterSnapshot();
     assert.deepEqual(beforeSeed.sessions, [session], "the new official session must be present before startup");
@@ -711,26 +721,7 @@ test("edited feedback on an official session survives startup seeding", async ()
     assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
     assert.deepEqual(official.sessions, []);
 
-    const team = official.teams.find(({ name }) => name === officialTeams[0].name);
-    const mentor = official.mentors.find(({ name }) => name === officialTeams[0].mentor);
-    assert.ok(team);
-    assert.ok(mentor);
-    assert.equal(team.mainMentorId, mentor.id);
-    const [session] = await db.insert(mentoringSessionsTable).values({
-      teamId: team.id,
-      mentorId: mentor.id,
-      sessionType: "principal",
-      sessionDate: "2026-03-03",
-      teamNps: 9,
-      teamActionability: 8,
-      mentorCommitment: 9,
-      mentorTraction: 7,
-      teamFeedbackStrongPoints: "Boa colaboração",
-      teamFeedbackImprovements: "Aprimorar o planejamento",
-      agreedNextSteps: "Revisar o próximo ciclo",
-      mentorQualitativeAssessment: "Evolução consistente",
-    }).returning();
-    assert.ok(session);
+    const session = await insertOfficialPrincipalSession(official, "2026-03-03");
 
     const editedFeedback = "Aprimorar o planejamento com base nos dados do piloto.";
     const [editedSession] = await db.update(mentoringSessionsTable)
@@ -750,6 +741,46 @@ test("edited feedback on an official session survives startup seeding", async ()
       await rosterSnapshot(),
       beforeSeed,
       "startup must preserve mentors, teams, students and the corrected official session",
+    );
+  } finally {
+    await clearRosterTables();
+  }
+});
+
+test("a corrected official session rating survives startup seeding", async () => {
+  const { rows: [{ name: databaseName }] } = await pool.query<{ name: string }>(
+    "SELECT current_database() AS name",
+  );
+  assert.match(databaseName, /^roster_test_/, "the corrected rating must use the disposable test database");
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const official = await rosterSnapshot();
+    assert.equal(official.mentors.length, officialTeams.length);
+    assert.equal(official.teams.length, officialTeams.length);
+    assert.equal(official.students.length, officialTeams.reduce((total, team) => total + team.students.length, 0));
+    assert.deepEqual(official.sessions, []);
+
+    const session = await insertOfficialPrincipalSession(official, "2026-03-05");
+    const correctedRating = 10;
+    assert.notEqual(session.teamNps, correctedRating);
+    const [correctedSession] = await db.update(mentoringSessionsTable)
+      .set({ teamNps: correctedRating })
+      .where(eq(mentoringSessionsTable.id, session.id))
+      .returning();
+    assert.deepEqual(
+      correctedSession,
+      { ...session, teamNps: correctedRating },
+      "the correction must change only the selected numeric rating",
+    );
+
+    const beforeSeed = await rosterSnapshot();
+    assert.deepEqual(beforeSeed.sessions, [correctedSession], "the corrected session must be present before startup");
+    await seedDatabase();
+    assert.deepEqual(
+      await rosterSnapshot(),
+      beforeSeed,
+      "startup must preserve mentors, teams, students and the corrected official session rating",
     );
   } finally {
     await clearRosterTables();
