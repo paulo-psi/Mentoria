@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { after, mock, test } from "node:test";
 import type { Server } from "node:http";
+import path from "node:path";
 import express from "express";
 import { clerkClient } from "@clerk/express";
 import { and, eq } from "drizzle-orm";
@@ -10,6 +12,7 @@ import {
 import teamRoutes from "../src/routes/team-maintenance";
 import studentRoutes from "../src/routes/students";
 import listRoutes from "../src/routes/teams";
+import { officialTeams } from "../src/official-data";
 import { seedDatabase } from "../src/seed";
 import { logger } from "../src/lib/logger";
 
@@ -103,6 +106,105 @@ function confirmation(team: Team) {
     expectedStudents: team.students.map(({ id, name, sortOrder }) => ({ id, name, sortOrder })),
   };
 }
+
+type OfficialEntry = {
+  numero: number;
+  mentor: string;
+  equipe: string;
+  integrantes: string[];
+};
+
+async function officialRoster(): Promise<OfficialEntry[]> {
+  // This checked-in attachment is the source document, not a projection of
+  // officialTeams: changes to either the seed data or the API must be noticed.
+  const document = JSON.parse(await readFile(path.resolve(
+    process.cwd(),
+    "../../attached_assets/Pasted--programa-PIBEP-edicao-16-edi-o-ano-2026-titulo-documen_1790526119463.txt",
+  ), "utf8")) as {
+    programa: string; edicao: string; ano: number; equipes: OfficialEntry[];
+  };
+  assert.equal(document.programa, "PIBEP");
+  assert.equal(document.edicao, "16ª edição");
+  assert.equal(document.ano, 2026);
+  assert.equal(document.equipes.length, 8);
+  assert.deepEqual(document.equipes.map(({ numero }) => numero), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(document.equipes.reduce((total, team) => total + team.integrantes.length, 0), 29);
+  assert.equal(new Set(document.equipes.map(({ mentor }) => mentor)).size, 8);
+  assert.equal(new Set(document.equipes.map(({ equipe }) => equipe)).size, 8);
+
+  const text = (await readFile(path.resolve(
+    process.cwd(),
+    "../../attached_assets/Pasted-Considere-os-dados-abaixo-como-a-rela-o-oficial-entre-m_1790526154609.txt",
+  ), "utf8")).replace(/\r\n/g, "\n");
+  const listed = [...text.matchAll(
+    /(\d+)\. Mentor\(a\): ([^\n]+)\n   Equipe: ([^\n]+)\n   Integrantes:\n((?:   - [^\n]+\n?)+)/g,
+  )].map(([, numero, mentor, equipe, members]) => ({
+    numero: Number(numero),
+    mentor,
+    equipe,
+    integrantes: [...members.matchAll(/^   - (.+)$/gm)].map(([, name]) => name),
+  }));
+  assert.deepEqual(listed, document.equipes, "both official attachments must agree");
+  return document.equipes;
+}
+
+function rosterProjection(rows: Team[]) {
+  return rows.map((team) => ({
+    equipe: team.name,
+    mentor: team.mainMentor.name,
+    integrantes: team.students.map(({ name }) => name),
+    ordens: team.students.map(({ sortOrder }) => sortOrder),
+    sessoes: team.sessionCount,
+  }));
+}
+
+test("official document, seed and API agree on every mentor, team, student and order", async () => {
+  const expected = await officialRoster();
+  assert.deepEqual(officialTeams.map(({ name, mentor, students }) => ({
+    equipe: name, mentor, integrantes: [...students],
+  })), expected.map(({ equipe, mentor, integrantes }) => ({ equipe, mentor, integrantes })));
+
+  await start();
+  try {
+    const first = await teams();
+    const expectedRoster = expected.map(({ equipe, mentor, integrantes }) => ({
+      equipe, mentor, integrantes,
+      ordens: integrantes.map((_, index) => index),
+      sessoes: 0,
+    }));
+    assert.deepEqual(rosterProjection(first), expectedRoster, "API must return all official pairs and ordered names");
+
+    const mentors = await db.select().from(mentorsTable);
+    const storedTeams = await db.select().from(teamsTable);
+    const students = await db.select().from(studentsTable);
+    assert.equal(mentors.length, 8, "no additional or missing mentors");
+    assert.equal(storedTeams.length, 8, "no additional or missing teams");
+    assert.equal(students.length, 29, "no additional, missing or duplicated students");
+    assert.deepEqual(await db.select().from(mentoringSessionsTable), [], "seed must not invent sessions");
+    assert.deepEqual(
+      [...storedTeams].sort((a, b) => a.id - b.id).map((team) => ({
+        equipe: team.name,
+        mentor: mentors.find(({ id }) => id === team.mainMentorId)?.name,
+        integrantes: students.filter(({ teamId }) => teamId === team.id)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map(({ name, sortOrder }) => ({ name, sortOrder })),
+      })),
+      expected.map(({ equipe, mentor, integrantes }) => ({
+        equipe, mentor, integrantes: integrantes.map((name, sortOrder) => ({ name, sortOrder })),
+      })),
+      "database links and positions must agree with the source document",
+    );
+
+    await seedDatabase();
+    assert.deepEqual(await teams(), first, "second seed must not change API rows or identifiers");
+    assert.deepEqual(await db.select().from(mentorsTable), mentors, "second seed must preserve mentors");
+    assert.deepEqual(await db.select().from(teamsTable), storedTeams, "second seed must preserve teams");
+    assert.deepEqual(await db.select().from(studentsTable), students, "second seed must preserve students");
+    assert.deepEqual(await db.select().from(mentoringSessionsTable), [], "second seed must not add sessions");
+  } finally {
+    await stop();
+  }
+});
 
 test("roster writes survive boot; permissions and stale confirmations protect data", async () => {
   await start();
@@ -199,6 +301,24 @@ test("roster writes survive boot; permissions and stale confirmations protect da
     assert.equal((await request("DELETE", `/teams/${deletable.id}`, confirmation(deletable), "admin")).status, 204);
     await stop();
     await start();
+    assert.ok(!(await teams()).some((team) => team.id === deletable.id));
+
+    // Even an incomplete/mismatched official roster must never be "repaired"
+    // by deleting unknown records or recreating previously removed rows.
+    const retained = (await teams()).find((team) => team.students.length > 0)!;
+    await db.update(studentsTable).set({ name: "Nome corrigido pela equipe" })
+      .where(eq(studentsTable.id, retained.students[0].id));
+    const beforeUnknownSeed = {
+      mentors: await db.select().from(mentorsTable),
+      teams: await db.select().from(teamsTable),
+      students: await db.select().from(studentsTable),
+      sessions: await db.select().from(mentoringSessionsTable),
+    };
+    await seedDatabase();
+    assert.deepEqual(await db.select().from(mentorsTable), beforeUnknownSeed.mentors);
+    assert.deepEqual(await db.select().from(teamsTable), beforeUnknownSeed.teams);
+    assert.deepEqual(await db.select().from(studentsTable), beforeUnknownSeed.students);
+    assert.deepEqual(await db.select().from(mentoringSessionsTable), beforeUnknownSeed.sessions);
     assert.ok(!(await teams()).some((team) => team.id === deletable.id));
   } finally {
     await stop();
