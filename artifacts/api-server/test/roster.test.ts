@@ -327,20 +327,13 @@ test("only the complete legacy demo migrates; any changed legacy data is preserv
 
     await clearRosterTables();
     await insertLegacyDemo({ withRealStudent: true });
-    const changedMentor = await db.select().from(mentorsTable)
-      .where(eq(mentorsTable.name, legacyDemoMentors[0].name));
-    assert.equal(changedMentor.length, 1);
-    await db.update(mentorsTable)
-      .set({ expertiseArea: "Área atualizada pela equipe" })
-      .where(eq(mentorsTable.id, changedMentor[0].id));
-
     const beforeUnrecognizedSeed = await rosterSnapshot();
     assert.equal(beforeUnrecognizedSeed.students.length, 1);
     await seedDatabase();
     assert.deepEqual(
       await rosterSnapshot(),
       beforeUnrecognizedSeed,
-      "one changed legacy field and a real student must prevent deletion of every roster record",
+      "a real student alone must prevent deletion of every roster record",
     );
   } finally {
     await clearRosterTables();
@@ -506,6 +499,16 @@ test("adding or removing a legacy session preserves every roster table on startu
 });
 
 test("a changed legacy mentor or team signature field preserves every roster table", async (t) => {
+  await t.test("mentor specialty differs from the legacy fixture", async () => {
+    await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
+      const editedSpecialty = "Área atualizada pela equipe";
+      assert.notEqual(mentors[0].expertiseArea, editedSpecialty);
+      await db.update(mentorsTable)
+        .set({ expertiseArea: editedSpecialty })
+        .where(eq(mentorsTable.id, mentors[0].id));
+    });
+  });
+
   await t.test("mentor email differs from the legacy fixture", async () => {
     await assertLegacyDataPreservedAfterChange(async ({ mentors }) => {
       await db.update(mentorsTable)
