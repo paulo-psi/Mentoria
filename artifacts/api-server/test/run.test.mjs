@@ -39,7 +39,7 @@ function createHarness(mode) {
     async connect() {
       if (this.isAdmin) {
         state.adminConnectAttempts += 1;
-        if (mode === "admin-connect") {
+        if (mode === "admin-connect" || mode === "admin-connect-and-temp-failure") {
           throw new Error("simulated administrative connection failure");
         }
         return;
@@ -145,7 +145,11 @@ function createHarness(mode) {
     readdir: async () => ["0000_initial.sql"],
     rm: async (...args) => {
       state.tempDirectoryRemovalAttempts += 1;
-      if (mode === "drop-and-temp-failure" || mode === "roster-and-temp-failure") {
+      if (
+        mode === "drop-and-temp-failure" ||
+        mode === "roster-and-temp-failure" ||
+        mode === "admin-connect-and-temp-failure"
+      ) {
         throw new Error("simulated temporary-directory removal failure");
       }
       return rm(...args);
@@ -274,6 +278,32 @@ test("administrative connection failure closes the client and removes temporary 
   assert.equal(harness.state.tempDirectories.length, 1, "the runner created one temporary directory");
   assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "removal of the temporary directory was attempted");
   await assert.rejects(access(harness.state.tempDirectories[0]), { code: "ENOENT" });
+});
+
+test("administrative connection failure remains visible when temporary-directory cleanup fails", async () => {
+  const harness = createHarness("admin-connect-and-temp-failure");
+
+  try {
+    await assert.rejects(runWith(harness), (error) => {
+      assert.ok(error instanceof AggregateError);
+      assert.equal(error.errors.length, 2);
+      assert.match(error.errors[0].message, /simulated administrative connection failure/);
+      assert.match(error.errors[1].message, /simulated temporary-directory removal failure/);
+      assert.equal(error.cause, error.errors[0]);
+      return true;
+    });
+
+    assertNoDatabaseOrFixturesWereCreated(harness.state);
+    assert.equal(harness.state.clientCreations, 1, "only the fake administrative client was created");
+    assert.equal(harness.state.adminConnectAttempts, 1, "the fake administrative connection was attempted");
+    assert.equal(harness.state.adminEnded, true, "closing the fake administrative client was attempted");
+    assert.equal(harness.state.tempDirectories.length, 1, "one temporary directory was created");
+    assert.equal(harness.state.tempDirectoryRemovalAttempts, 1, "temporary-directory removal was attempted");
+  } finally {
+    for (const directory of harness.state.tempDirectories) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 });
 
 test("SQL application failure removes the generated database and temporary files", async () => {
