@@ -126,4 +126,8 @@ test("GitHub Actions workflows are linted in CI and block release on failure", a
     /go install github\.com\/rhysd\/actionlint\/cmd\/actionlint@v1\.7\.12/,
   );
   assert.match(lintJob, /"\$\(go env GOPATH\)\/bin\/actionlint"/);
+  assert.match(
+    lintJob,
+    /ACTIONLINT_BIN="\$\(go env GOPATH\)\/bin\/actionlint" node --test \.github\/workflows\/actionlint-negative\.test\.mjs/,
+  );
 });

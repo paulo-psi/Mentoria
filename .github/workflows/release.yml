@@ -155,6 +155,8 @@ jobs:
         run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
       - name: Lint GitHub Actions workflows
         run: "$(go env GOPATH)/bin/actionlint"
+      - name: Confirm malformed workflows are rejected
+        run: ACTIONLINT_BIN="$(go env GOPATH)/bin/actionlint" node --test .github/workflows/actionlint-negative.test.mjs
 
   release:
     name: Publish GitHub release
