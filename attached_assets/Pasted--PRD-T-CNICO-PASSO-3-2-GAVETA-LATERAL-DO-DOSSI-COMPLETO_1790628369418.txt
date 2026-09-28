@@ -1,0 +1,76 @@
+### PRD TÉCNICO - PASSO 3.2: GAVETA LATERAL DO DOSSIÊ COMPLETO (DIÁRIO DE BORDO)
+
+Atue como Engenheiro de Software Sênior e Especialista em UI/UX. Sua tarefa exclusiva neste passo é implementar o componente de gaveta lateral (slide-over drawer / sheet) que exibe o dossiê detalhado da equipe ao clicar em "Ver Dossiê" na tabela executiva, consumindo os dados através do hook `useGetTeamSessions`.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Oferecer ao gestor uma visão de profundidade (o diário de bordo completo da startup). Ao clicar em "Ver Dossiê" em uma linha da tabela, uma gaveta lateral suave desliza da direita da tela exibindo a linha do tempo de todas as mentorias daquela equipe, garantindo a leitura dos pareceres qualitativos e combinados na íntegra.
+
+---
+
+#### 2. STACK E GOVERNANÇA TÉCNICA
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`. Proibido `npm` ou `yarn`.
+- **Camada de Dados:** Utilize obrigatoriamente o hook `useGetTeamSessions` gerado pelo Orval/React Query, passando o `teamId` da equipe selecionada.
+- **Design System & Acessibilidade:**
+  - Paleta neutra (`zinc`/`slate`), bordas finas `border-zinc-200`, cantos suaves e tipografia legível.
+  - Comportamento de Drawer/Slide-over: fechamento ao clicar fora (backdrop), ao pressionar a tecla `Esc` ou no botão de fechar (`X`).
+  - Rolagem vertical suave e independente dentro da gaveta (`overflow-y-auto`).
+  - Ícones: `lucide-react` (ex.: `X`, `Calendar`, `User`, `CheckCircle2`, `MessageSquare`, `ArrowRight`).
+
+---
+
+#### 3. COMPONENTES VISUAIS A IMPLEMENTAR
+
+##### A. Conexão do Gatilho na Tabela
+- Conecte o botão **"Ver Dossiê"** de cada linha da tabela executiva para definir o estado da equipe selecionada (`selectedTeamId`) e abrir a gaveta.
+
+##### B. Estrutura da Gaveta Lateral (Slide-Over Drawer)
+- **Largura:** Ocupar entre `max-w-2xl` e `max-w-3xl` em telas grandes para proporcionar uma leitura confortável de textos longos.
+- **Cabeçalho Fixo da Gaveta:**
+  - Nome da Startup em destaque (`text-lg font-semibold text-zinc-900`).
+  - Badges de contexto: Estágio atual da equipe e Nome do Mentor Principal associado.
+  - Botão de fechar discreto no canto superior direito com ícone `X`.
+
+##### C. Linha do Tempo Cronológica de Sessões (Corpo da Gaveta)
+Para cada sessão retornada pelo hook (já ordenadas da mais recente para a mais antiga):
+1. **Cabeçalho do Card de Sessão:**
+   - Data do encontro formatada amigavelmente (ex.: "24 de março de 2026").
+   - Badge do Tipo de Sessão:
+     - `Principal`: badge neutro/zinc.
+     - `Transversal`: badge azul suave ou roxo discreto.
+     - `Externo`: badge âmbar/laranja suave.
+   - Mentor Condutor: Nome e área de especialidade do mentor que realizou a sessão.
+2. **Grade Resumida de Pontuações (As 4 Notas 0 a 10):**
+   - Mini-grid com 4 métricas em caixas sutis:
+     - `NPS da Equipe: X/10`
+     - `Acionabilidade: X/10`
+     - `Comprometimento do Time: X/10`
+     - `Tração/Execução: X/10`
+3. **Seção Qualitativa NA ÍNTEGRA (Preservação Total):**
+   - **Parecer do Mentor:** Bloco de texto com a análise detalhada sobre a maturidade e entregas da equipe.
+   - **Visão da Equipe:**
+     - *Pontos Fortes:* Texto integral dos elogios e pontos positivos destacados pelo time.
+     - *Oportunidades de Melhoria:* Texto integral das observações de ajustes.
+   - **Próximos Passos Acordados:** Container destacado em fundo sutil (`bg-zinc-50 border border-zinc-200 rounded-lg p-3.5`) exibindo a lista e compromissos combinados para a semana seguinte.
+
+##### D. Estados de Interface (UX)
+- **Loading:** Exiba skeleton vertical simulando os cards de sessões enquanto os dados do dossiê carregam.
+- **Empty State:** Se a equipe ainda não tiver sessões registradas, exiba uma mensagem neutra e elegante: *"Nenhuma mentoria registrada para esta equipe até o momento."*
+- **Error State:** Banner discreto com botão de "Tentar novamente" em caso de falha de conexão.
+
+---
+
+#### 4. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] O comando de verificação estática `pnpm run typecheck` passa sem nenhum erro de TypeScript.
+- [ ] A suíte de testes `pnpm test` passa com novos testes cobrindo a abertura da gaveta, exibição dos textos íntegros e fechamento.
+- [ ] Clicar em "Ver Dossiê" em qualquer equipe na tabela abre a gaveta com animação suave e consome os dados reais da API.
+- [ ] Todos os textos qualitativos longos são exibidos por inteiro, sem quebras de layout ou truncamento de caracteres (`truncate` ou `text-ellipsis` proibidos nos pareceres textuais).
+- [ ] A tecla `Esc` ou o clique no botão `X` fecha a gaveta e restaura o foco.
+
+---
+
+#### 5. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO ative o botão "+ Novo Registro" para cadastro de sessões (escopo do Marco 4).
+- NÃO crie edição ou exclusão de sessões existentes dentro da gaveta.
+- NÃO altere rotas ou o contrato OpenAPI.
