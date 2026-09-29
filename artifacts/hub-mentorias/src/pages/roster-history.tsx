@@ -39,7 +39,7 @@ export function RosterHistory({ team }: { team?: Team }) {
       </div>}
       {!filtersValid ? <p role="alert" className="mt-5 text-xs text-destructive">Informe IDs inteiros positivos.</p> :
         history.isLoading ? <p className="mt-5 text-xs text-muted-foreground">Carregando histórico…</p> :
-        history.isError ? <div role="alert" className="mt-5 text-xs text-destructive">Não foi possível consultar o histórico. <button type="button" className="inline-flex min-h-10 items-center underline" onClick={() => void history.refetch()}>Tentar novamente</button></div> :
+         history.isError ? <div role="alert" className="mt-5 text-xs text-destructive">Não foi possível consultar o histórico. <button type="button" className="inline-flex min-h-10 items-center underline" onClick={() => void queryClient.refetchQueries({ queryKey: getGetRosterAuditQueryKey(filters), exact: true })}>Tentar novamente</button></div> :
         history.data?.length ? <ol className="mt-5 divide-y divide-border/70" data-testid="lista-historico">
           {history.data.map((event) => <li key={event.id} className="py-3 text-xs leading-5">
             <div className="font-semibold">{event.summary}</div>
