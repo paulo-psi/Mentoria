@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { DashboardStats, MentorOption, Student, Team } from '@workspace/api-client-react';
 
 async function mockRosterApi(page: Page, canManage = true, { accessFails = false }: { accessFails?: boolean } = {}) {
@@ -351,6 +351,94 @@ test('mobile tables, registration dialog, and dossier stay within the viewport',
     await expect(registration).toBeHidden();
   }
 
+  expect(api.unexpectedRequests, 'mobile interactions should use only the mocked API').toEqual([]);
+});
+
+test('mobile maintenance forms fit and remain usable at narrow widths', async ({ page }) => {
+  const api = await mockRosterApi(page);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await page.goto('/manage');
+  await expect(page.getByTestId('button-nova-equipe')).toBeVisible();
+
+  const assertPageFits = async () => {
+    await expect.poll(() => page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    )).toBe(true);
+  };
+  const assertControlsFit = async (scope: Locator) => {
+    await expect.poll(() => scope.evaluate((element) => {
+      const viewportWidth = document.documentElement.clientWidth;
+      return Array.from(element.querySelectorAll<HTMLElement>('input, select, textarea, button'))
+        .filter((control) => control.getClientRects().length > 0)
+        .flatMap((control) => {
+          const rect = control.getBoundingClientRect();
+          const problems: string[] = [];
+          if (rect.left < 0 || rect.right > viewportWidth) problems.push(`${control.tagName} outside viewport`);
+          if (control.tagName === 'BUTTON' && rect.height < 40) {
+            const label = control.dataset.testid ?? control.textContent?.trim() ?? 'unlabeled button';
+            problems.push(`${label} is only ${Math.round(rect.height)}px tall`);
+          }
+          return problems;
+        });
+    })).toEqual([]);
+  };
+
+  for (const width of [320, 360, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await assertControlsFit(page.locator('main'));
+    await assertPageFits();
+
+    await page.getByTestId('button-selecionar-equipe-1').click();
+    await expect(page.getByTestId('panel-equipe-1')).toBeVisible();
+    await expect(page.getByTestId('input-nome-equipe')).toBeVisible();
+    await page.getByTestId('input-nome-equipe').fill('Equipe Horizonte Revisada');
+    await expect(page.getByTestId('button-salvar-equipe')).toBeVisible();
+    await assertControlsFit(page.getByTestId('panel-equipe-1'));
+    await assertControlsFit(page.getByTestId('historico-relacao'));
+    await assertPageFits();
+
+    const student = page.getByTestId('row-estudante-1');
+    await page.getByTestId('button-editar-estudante-1').click();
+    await expect(page.getByTestId('input-editar-estudante-1')).toBeVisible();
+    await assertControlsFit(student);
+    await assertPageFits();
+    await page.getByTestId('button-cancelar-edicao-estudante-1').click();
+
+    await page.getByTestId('button-excluir-estudante-1').click();
+    await expect(page.getByTestId('confirmacao-excluir-estudante-1')).toBeVisible();
+    await assertControlsFit(student);
+    await assertPageFits();
+    await page.getByTestId('button-cancelar-exclusao-estudante-1').click();
+
+    await page.getByTestId('button-nova-equipe').click();
+    const createPanel = page.getByTestId('panel-criar-equipe');
+    await expect(createPanel).toBeVisible();
+    await page.getByTestId('button-adicionar-estudante-inicial').click();
+    await page.getByTestId('button-adicionar-estudante-inicial').click();
+    await page.getByTestId('input-nome-equipe').fill('Equipe Nova');
+    await page.getByTestId('select-mentor-equipe').selectOption('1');
+    await page.getByTestId('input-estudante-inicial-0').fill('Estudante Inicial Um');
+    await page.getByTestId('button-salvar-equipe').click();
+    const initialStudentsError = page.getByTestId('erro-estudantes-iniciais');
+    await expect(initialStudentsError).toBeVisible();
+    await expect(initialStudentsError).toContainText('Preencha ou remova os estudantes em branco');
+    const errorFits = await initialStudentsError.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.left >= 0 &&
+        rect.right <= document.documentElement.clientWidth &&
+        element.scrollWidth <= element.clientWidth;
+    });
+    expect(errorFits, 'initial-student validation message should fit without clipping').toBe(true);
+    await assertControlsFit(createPanel);
+    await assertPageFits();
+    await page.getByTestId('button-cancelar-nova-equipe').click();
+  }
+
+  expect(api.mutationRequests, 'mobile maintenance layout checks should not save changes').toEqual([]);
   expect(api.unexpectedRequests, 'mobile interactions should use only the mocked API').toEqual([]);
 });
 
