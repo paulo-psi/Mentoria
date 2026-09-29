@@ -111,6 +111,15 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
 
   let historyRequests = 0;
   let retryAllowed = false;
+  let holdInitialHistoryResponse = true;
+  let signalInitialHistoryRequestStarted!: () => void;
+  let releaseInitialHistoryResponse!: () => void;
+  const initialHistoryRequestStarted = new Promise<void>((resolve) => {
+    signalInitialHistoryRequestStarted = resolve;
+  });
+  const initialHistoryRequestCanFinish = new Promise<void>((resolve) => {
+    releaseInitialHistoryResponse = resolve;
+  });
   let teamHistoryResponse: unknown = [];
   let holdInitialFilteredResponse = false;
   let signalInitialFilteredRequestStarted!: () => void;
@@ -152,6 +161,10 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       const teamId = requestUrl.searchParams.get('teamId');
       const studentId = requestUrl.searchParams.get('studentId');
       historyFilters.push({ teamId, studentId });
+      if (teamId === null && studentId === null && holdInitialHistoryResponse) {
+        signalInitialHistoryRequestStarted();
+        await initialHistoryRequestCanFinish;
+      }
       if (!retryAllowed) {
         status = 503;
         data = { error: 'History temporarily unavailable' };
@@ -205,9 +218,16 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   const history = page.getByTestId('historico-relacao');
   const alert = history.getByRole('alert');
   const retry = alert.getByRole('button', { name: 'Tentar novamente' });
+  const historyAnnouncement = history.getByTestId('historico-announcement');
 
+  await initialHistoryRequestStarted;
+  await expect(history.getByRole('status')).toHaveText('Carregando histórico…');
+  await expect(historyAnnouncement).toHaveText('');
+  holdInitialHistoryResponse = false;
+  releaseInitialHistoryResponse();
   await expect(alert).toContainText('Não foi possível consultar o histórico.', { timeout: 45_000 });
   await expect(retry).toBeVisible();
+  await expect(historyAnnouncement).toHaveText('');
   expect(historyRequests, 'the failed query should exhaust its automatic attempts').toBeGreaterThanOrEqual(4);
   await assertHistoryErrorFitsAtMobileWidths(page);
 
@@ -220,6 +240,9 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   const historyList = history.getByTestId('lista-historico');
   await expect(historyList).toBeVisible();
   await expect(historyList).toContainText('Equipe Horizonte criada');
+  await expect(historyAnnouncement).toHaveText(
+    'Consulta de histórico concluída (sem filtros): 1 registro encontrado.',
+  );
   expect(historyRequests, 'retry should issue another history request').toBeGreaterThanOrEqual(5);
 
   retryAllowed = false;
@@ -265,16 +288,21 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   );
   await expect(historyList).toContainText('Equipe Horizonte criada');
   await expect(historyList).not.toContainText('Equipe Aurora registrada');
+  await expect(historyAnnouncement).toHaveText('');
   holdInitialFilteredResponse = false;
   releaseInitialFilteredResponse();
   await initialFilteredResponse;
   await expect(historyUpdateStatus).toHaveCount(0);
   await expect(historyList).toContainText('Equipe Aurora registrada');
+  await expect(historyAnnouncement).toHaveText(
+    'Consulta de histórico concluída (equipe #2): 1 registro encontrado.',
+  );
 
   retryAllowed = false;
   await history.getByRole('button', { name: 'Atualizar histórico' }).click();
   await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
   await expect(alert).toContainText('equipe #2');
+  await expect(historyAnnouncement).toHaveText('');
   await expect(historyList).toContainText('Equipe Aurora registrada');
   await expect(historyList).not.toContainText('Equipe Horizonte criada');
   await expect(teamFilter).toHaveValue('2');
@@ -302,12 +330,18 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   });
   await retry.click();
   await filteredRetryStarted;
+  await expect(alert).toContainText('Não foi possível atualizar o histórico.');
+  await expect(historyAnnouncement).toHaveText('');
   await expect(historyList).toContainText('Equipe Aurora registrada');
   await expect(historyList).not.toContainText('Equipe Aurora atualizada');
   releaseFilteredRetryResponse();
   await filteredRetryResponse;
+  await expect(historyUpdateStatus).toHaveCount(0);
   await expect(historyList).toBeVisible();
   await expect(historyList).toContainText('Equipe Aurora atualizada');
+  await expect(historyAnnouncement).toHaveText(
+    'Consulta de histórico concluída (equipe #2): 1 registro encontrado.',
+  );
   await expect(historyList).toContainText('Equipe #2');
   await expect(historyList).not.toContainText('Equipe Aurora registrada');
   await expect(historyList).not.toContainText('Equipe Horizonte criada');
@@ -357,11 +391,15 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await teamFilter.fill('5');
   await emptyBaselineResponse;
   await expect(history.getByTestId('historico-vazio')).toHaveText('Nenhuma alteração registrada para este filtro.');
+  await expect(historyAnnouncement).toHaveText(
+    'Consulta de histórico concluída (equipe #5): 0 registros encontrados.',
+  );
 
   retryAllowed = false;
   await teamFilter.fill('6');
   await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
   await expect(alert).toContainText('equipe #5');
+  await expect(historyAnnouncement).toHaveText('');
   await expect(history.getByTestId('historico-vazio'))
     .toHaveText('Nenhuma alteração registrada na última consulta (equipe #5).');
   await expect(teamFilter).toHaveValue('6');
@@ -376,6 +414,9 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await retry.click();
   await emptyRetryResponse;
   await expect(alert).toHaveCount(0);
+  await expect(historyAnnouncement).toHaveText(
+    'Consulta de histórico concluída (equipe #6): 0 registros encontrados.',
+  );
   await expect(history.getByTestId('historico-vazio'))
     .toHaveText('Nenhuma alteração registrada para este filtro.');
   await expect(history.getByTestId('historico-vazio')).not.toContainText('equipe #5');

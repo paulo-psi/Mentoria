@@ -46,10 +46,16 @@ export function RosterHistory({ team }: { team?: Team }) {
   const visibleHistory = history.data === undefined
     ? lastSuccessfulHistory
     : { data: history.data, filters };
+  const historyAnnouncement = !filtersValid || history.data === undefined || history.isError || history.isFetching || !history.isFetchedAfterMount
+    ? ''
+    : `Consulta de histórico concluída (${describeHistoryFilters(filters)}): ${history.data.length} ${history.data.length === 1 ? 'registro encontrado' : 'registros encontrados'}.`;
 
   return (
     <section className="mt-6 rounded-2xl border border-border bg-card p-5 sm:p-7" data-testid="historico-relacao">
       <h2 className="font-display text-2xl tracking-[-0.035em]">Histórico de alterações</h2>
+      <span className="sr-only" aria-live="polite" aria-atomic="true" data-testid="historico-announcement">
+        {historyAnnouncement}
+      </span>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">Até 100 registros recentes. Filtre por ID para consultar também equipes ou estudantes já excluídos. Nomes de estudantes não são guardados aqui.</p>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="w-36 text-xs font-semibold">ID da equipe
@@ -75,7 +81,7 @@ export function RosterHistory({ team }: { team?: Team }) {
             <button type="button" className="inline-flex min-h-10 items-center underline" onClick={() => void queryClient.refetchQueries({ queryKey: getGetRosterAuditQueryKey(filters), exact: true })}>Tentar novamente</button>
           </div> :
           !visibleHistory && history.isLoading ?
-            <p className="mt-5 text-xs text-muted-foreground">Carregando histórico…</p> :
+            <p role="status" className="mt-5 text-xs text-muted-foreground">Carregando histórico…</p> :
           visibleHistory && history.isFetching ?
             <p role="status" className="mt-5 text-xs text-muted-foreground">
               Atualizando histórico. Os resultados da última consulta ({describeHistoryFilters(visibleHistory.filters)}) continuam visíveis.

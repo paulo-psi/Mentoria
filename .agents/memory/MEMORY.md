@@ -13,3 +13,4 @@
 - [Roster test helpers](roster-test-helpers.md) — keep object-return expressions attached to `return`; automatic semicolon insertion can silently invalidate fixture helpers.
 - [React Hook Form and Zod](react-hook-form-zod.md) — when resolver types cannot carry transformed output, validate string-valued controls and convert numbers at the API boundary.
 - [Mobile error-state E2E retries](playwright-mobile-error-retries.md) — failed React Query retries can temporarily unmount notices and delay settled-error assertions.
+- [React Query live announcements](react-query-live-announcements.md) — announce query completion only after a post-mount fetch, not from cached data shown before its refresh.
