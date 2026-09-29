@@ -112,6 +112,15 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   let historyRequests = 0;
   let retryAllowed = false;
   let teamHistoryResponse: unknown = [];
+  let holdInitialFilteredResponse = false;
+  let signalInitialFilteredRequestStarted!: () => void;
+  let releaseInitialFilteredResponse!: () => void;
+  const initialFilteredRequestStarted = new Promise<void>((resolve) => {
+    signalInitialFilteredRequestStarted = resolve;
+  });
+  const initialFilteredRequestCanFinish = new Promise<void>((resolve) => {
+    releaseInitialFilteredResponse = resolve;
+  });
   let holdFilteredRetryResponse = false;
   let signalFilteredRetryStarted!: () => void;
   let releaseFilteredRetryResponse!: () => void;
@@ -156,6 +165,10 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
           actorEmail: 'admin@example.com',
         }];
       } else if (teamId === '2' && studentId === null) {
+        if (holdInitialFilteredResponse) {
+          signalInitialFilteredRequestStarted();
+          await initialFilteredRequestCanFinish;
+        }
         if (holdFilteredRetryResponse) {
           signalFilteredRetryStarted();
           await filteredRetryCanFinish;
@@ -243,8 +256,19 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       requestUrl.searchParams.get('teamId') === '2' &&
       response.status() === 200;
   });
+  holdInitialFilteredResponse = true;
   await teamFilter.fill('2');
+  await initialFilteredRequestStarted;
+  const historyUpdateStatus = history.getByRole('status');
+  await expect(historyUpdateStatus).toHaveText(
+    'Atualizando histórico. Os resultados da última consulta (sem filtros) continuam visíveis.',
+  );
+  await expect(historyList).toContainText('Equipe Horizonte criada');
+  await expect(historyList).not.toContainText('Equipe Aurora registrada');
+  holdInitialFilteredResponse = false;
+  releaseInitialFilteredResponse();
   await initialFilteredResponse;
+  await expect(historyUpdateStatus).toHaveCount(0);
   await expect(historyList).toContainText('Equipe Aurora registrada');
 
   retryAllowed = false;

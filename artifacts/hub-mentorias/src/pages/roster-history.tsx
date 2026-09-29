@@ -77,7 +77,9 @@ export function RosterHistory({ team }: { team?: Team }) {
           !visibleHistory && history.isLoading ?
             <p className="mt-5 text-xs text-muted-foreground">Carregando histórico…</p> :
           visibleHistory && history.isFetching ?
-            <p role="status" className="mt-5 text-xs text-muted-foreground">Atualizando histórico. Os últimos dados carregados continuam visíveis.</p> :
+            <p role="status" className="mt-5 text-xs text-muted-foreground">
+              Atualizando histórico. Os resultados da última consulta ({describeHistoryFilters(visibleHistory.filters)}) continuam visíveis.
+            </p> :
             null}
         {visibleHistory?.data.length ? <ol className="mt-5 divide-y divide-border/70" data-testid="lista-historico">
           {visibleHistory.data.map((event) => <li key={event.id} className="py-3 text-xs leading-5">
