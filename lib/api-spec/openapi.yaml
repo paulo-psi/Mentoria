@@ -504,7 +504,36 @@ components:
           type: integer
         name:
           type: string
-      required: [id, name]
+        email:
+          type: ["string", "null"]
+          format: email
+        expertiseArea:
+          type: ["string", "null"]
+        mentorType:
+          type: ["string", "null"]
+          enum: [interno, externo, null]
+        totalSessions:
+          type: integer
+          minimum: 0
+          description: Total mentoring sessions conducted by this mentor.
+        avgNpsReceived:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 10
+          description: Mean team NPS for this mentor, or null when there are no sessions.
+        assignedTeamsCount:
+          type: integer
+          minimum: 0
+          description: Number of distinct teams mentored.
+      required:
+        - id
+        - name
+        - email
+        - expertiseArea
+        - mentorType
+        - totalSessions
+        - avgNpsReceived
+        - assignedTeamsCount
     ServerStatus:
       type: object
       properties:

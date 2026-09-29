@@ -20,6 +20,7 @@ export * from './mentoringSessionInputSessionType';
 export * from './mentoringSessionSessionType';
 export * from './mentorMentorType';
 export * from './mentorOption';
+export * from './mentorOptionMentorType';
 export * from './rosterAuditEvent';
 export * from './serverStatus';
 export * from './serverStatusStatus';

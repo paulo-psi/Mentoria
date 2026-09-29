@@ -1,0 +1,66 @@
+### PRD TÉCNICO - PASSO 5.1: VISÃO CONSOLIDADA DE DESEMPENHO DOS MENTORES
+
+Atue como Engenheiro de Software Sênior e Especialista em UI/UX. Sua tarefa exclusiva neste passo é implementar a visualização agregada de mentores, permitindo alternar facilmente entre a visão de "Equipes" e "Mentores" na tela principal autenticada.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Oferecer ao gestor o acompanhamento da produtividade e qualidade de cada mentor do ciclo. A tela deve disponibilizar um seletor de abas minimalista (`Equipes` e `Mentores`). Na aba `Mentores`, será exibida uma tabela limpa listando todos os mentores cadastrados, seu tipo (Interno vs. Externo), especialidade, total de sessões conduzidas no ciclo, média de NPS recebida dos estudantes e equipes atendidas.
+
+---
+
+#### 2. STACK E GOVERNANÇA TÉCNICA
+- **Gerenciador de Pacotes:** Use estritamente `pnpm`. Proibido `npm` ou `yarn`.
+- **Fluxo OpenAPI-First:**
+  - Verifique se a rota `GET /api/mentors` já retorna os dados agregados (`totalSessions`, `avgNpsReceived`, `assignedTeamsCount`). 
+  - Se esses campos calculados ainda não estiverem no contrato OpenAPI YAML, atualize primeiro a especificação OpenAPI, execute o codegen do Orval (`pnpm run codegen`) e ajuste a consulta no controller Express com Drizzle ORM.
+  - No frontend, consuma os dados via hook tipado gerado pelo Orval/React Query (`useGetMentors`).
+- **Design System:** Mantenha a consistência visual com shadcn/ui: paleta `zinc`/`slate`, bordas finas `border-zinc-200`, cantos suaves `rounded-xl`, tipografia `Inter` e ícones `lucide-react`.
+
+---
+
+#### 3. COMPONENTES VISUAIS A IMPLEMENTAR
+
+##### A. Alternador de Visão (Tabs Minimalistas)
+- Posicione logo acima da tabela atual um controle de abas discreto em pílula (`bg-zinc-100 p-1 rounded-lg inline-flex gap-1`):
+  - Aba 1: **"Equipes em Acompanhamento"** (com badge contador: 8).
+  - Aba 2: **"Painel de Mentores"** (com badge contador total de mentores).
+- A aba ativa deve ter fundo branco (`bg-white shadow-xs font-medium text-zinc-900`), e a aba inativa deve ter texto secundário (`text-zinc-600 hover:text-zinc-900`).
+
+##### B. Tabela Consolidada de Mentores (Renderizada na Aba "Mentores")
+Construa uma tabela no mesmo padrão estético da tabela de equipes, contendo as colunas:
+1. **Mentor:**
+   - Nome do mentor em negrito (`font-medium text-zinc-900`).
+   - E-mail em texto secundário discreto.
+2. **Tipo & Vínculo:**
+   - Badge semântico neutro: `Interno` (tutor fixo do programa) ou `Externo` (especialista convidado).
+3. **Área de Especialidade:**
+   - Texto limpo indicando a expertise (ex.: 'Growth & Marketing', 'Finanças & Pricing', 'Produto & UX').
+4. **Sessões Realizadas:**
+   - Contador numérico do total de mentorias conduzidas por aquele mentor no ciclo acumulado.
+5. **NPS Médio Recebido (0 a 10):**
+   - Nota média calculada a partir das avaliações que as equipes deram a ele (`team_nps`).
+   - Se o mentor ainda não conduziu sessões, exibir traço neutro (`-`).
+6. **Equipes Atendidas:**
+   - Quantidade de startups distintas que já passaram por mentoria com ele.
+
+##### C. Estados de Interface (UX)
+- **Loading:** Skeletons horizontais durante o carregamento dos dados dos mentores.
+- **Empty State:** Mensagem amigável caso não haja mentores cadastrados.
+
+---
+
+#### 4. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] O contrato OpenAPI e os schemas gerados pelo Orval refletem os campos de métricas por mentor.
+- [ ] O endpoint `GET /api/mentors` calcula corretamente no banco PostgreSQL: total de sessões por mentor e a média de nota recebida.
+- [ ] O alternador de abas funciona perfeitamente, permitindo transitar entre a tabela de equipes e a tabela de mentores sem recarregar a página.
+- [ ] A tabela de mentores exibe os mentores cadastrados pelo seed com seus totais e médias correspondentes.
+- [ ] O comando de verificação de tipos `pnpm run typecheck` passa sem erros.
+- [ ] A suíte de testes `pnpm test` é atualizada com testes da nova aba/tabela e passa integralmente.
+
+---
+
+#### 5. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO crie tela de edição ou exclusão de mentores.
+- NÃO implemente exportação para CSV ou PDF (escopo futuro).
+- NÃO altere a estrutura do modal de "+ Novo Registro" nem a gaveta de dossiê.

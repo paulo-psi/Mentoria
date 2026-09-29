@@ -24,9 +24,43 @@ export interface AccessPermissions {
   canManage: boolean;
 }
 
+/**
+ * @nullable
+ */
+export type MentorOptionMentorType = typeof MentorOptionMentorType[keyof typeof MentorOptionMentorType] | null;
+
+
+export const MentorOptionMentorType = {
+  interno: 'interno',
+  externo: 'externo',
+} as const;
+
 export interface MentorOption {
   id: number;
   name: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  expertiseArea: string | null;
+  /** @nullable */
+  mentorType: MentorOptionMentorType;
+  /**
+     * Total mentoring sessions conducted by this mentor.
+     * @minimum 0
+     */
+  totalSessions: number;
+  /**
+     * Mean team NPS for this mentor, or null when there are no sessions.
+     * @minimum 0
+     * @maximum 10
+     * @nullable
+     */
+  avgNpsReceived: number | null;
+  /**
+     * Number of distinct teams mentored.
+     * @minimum 0
+     */
+  assignedTeamsCount: number;
 }
 
 export type ServerStatusStatus = typeof ServerStatusStatus[keyof typeof ServerStatusStatus];

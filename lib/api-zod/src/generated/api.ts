@@ -495,9 +495,24 @@ export const DeleteStudentResponse = zod.void()
 /**
  * @summary List mentors available for team assignment
  */
+export const getMentorsResponseTotalSessionsMin = 0;
+
+export const getMentorsResponseAvgNpsReceivedMin = 0;
+export const getMentorsResponseAvgNpsReceivedMax = 10;
+
+export const getMentorsResponseAssignedTeamsCountMin = 0;
+
+
+
 export const GetMentorsResponseItem = zod.object({
   "id": zod.number().int(),
-  "name": zod.string()
+  "name": zod.string(),
+  "email": zod.string().email().nullable(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable(),
+  "totalSessions": zod.number().int().min(getMentorsResponseTotalSessionsMin).describe('Total mentoring sessions conducted by this mentor.'),
+  "avgNpsReceived": zod.number().min(getMentorsResponseAvgNpsReceivedMin).max(getMentorsResponseAvgNpsReceivedMax).nullable().describe('Mean team NPS for this mentor, or null when there are no sessions.'),
+  "assignedTeamsCount": zod.number().int().min(getMentorsResponseAssignedTeamsCountMin).describe('Number of distinct teams mentored.')
 })
 export const GetMentorsResponse = zod.array(GetMentorsResponseItem)
 

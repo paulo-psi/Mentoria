@@ -5,8 +5,32 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MentorOptionMentorType } from './mentorOptionMentorType';
 
 export interface MentorOption {
   id: number;
   name: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  expertiseArea: string | null;
+  /** @nullable */
+  mentorType: MentorOptionMentorType;
+  /**
+     * Total mentoring sessions conducted by this mentor.
+     * @minimum 0
+     */
+  totalSessions: number;
+  /**
+     * Mean team NPS for this mentor, or null when there are no sessions.
+     * @minimum 0
+     * @maximum 10
+     * @nullable
+     */
+  avgNpsReceived: number | null;
+  /**
+     * Number of distinct teams mentored.
+     * @minimum 0
+     */
+  assignedTeamsCount: number;
 }
