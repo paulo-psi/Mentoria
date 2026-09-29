@@ -37,7 +37,7 @@ export function MentorsTable({ mentors }: MentorsTableProps) {
       className="max-w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm"
       data-testid="table-mentores"
     >
-      <div className="max-w-full overflow-x-auto">
+      <div className="max-w-full touch-pan-x overflow-x-auto overscroll-x-contain">
         <table className="w-full min-w-[850px] table-fixed text-left font-inter text-xs">
           <caption className="sr-only">Indicadores consolidados de desempenho dos mentores</caption>
           <thead className="bg-zinc-50 text-[11px] font-semibold text-zinc-500">

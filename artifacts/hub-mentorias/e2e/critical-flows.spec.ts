@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { DashboardStats, Student, Team } from '@workspace/api-client-react';
+import type { DashboardStats, MentorOption, Student, Team } from '@workspace/api-client-react';
 
 async function mockRosterApi(page: Page, canManage = true, { accessFails = false }: { accessFails?: boolean } = {}) {
   const team: Team = {
@@ -34,6 +34,28 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     avgTraction: 8.5,
     networkOpennessRate: 41.7,
   };
+  const mentors: MentorOption[] = [
+    {
+      id: 1,
+      name: 'Mentora de Teste',
+      email: null,
+      expertiseArea: null,
+      mentorType: null,
+      totalSessions: 0,
+      avgNpsReceived: null,
+      assignedTeamsCount: 1,
+    },
+    {
+      id: 2,
+      name: 'Mentor Transversal',
+      email: null,
+      expertiseArea: null,
+      mentorType: 'externo',
+      totalSessions: 0,
+      avgNpsReceived: null,
+      assignedTeamsCount: 0,
+    },
+  ];
 
   await page.route('**/api/**', async (route) => {
     const { pathname } = new URL(route.request().url());
@@ -54,10 +76,8 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     else if (method === 'GET' && pathname === '/api/health') data = { status: 'ok', database: 'connected' };
     else if (method === 'GET' && pathname === '/api/dashboard/stats') data = dashboardStats;
     else if (method === 'GET' && pathname === '/api/teams') data = [team];
-    else if (method === 'GET' && pathname === '/api/mentors') data = [
-      { id: 1, name: 'Mentora de Teste' },
-      { id: 2, name: 'Mentor Transversal' },
-    ];
+    else if (method === 'GET' && pathname === '/api/mentors') data = mentors;
+    else if (method === 'GET' && pathname === '/api/teams/1/sessions') data = [];
     else if (method === 'GET' && pathname === '/api/roster-audit') data = [];
     else if (canManage && method === 'POST' && pathname === '/api/teams/1/sessions') {
       const body = route.request().postDataJSON() as {
@@ -252,6 +272,86 @@ test('administrator records a transversal session with another mentor', async ({
   await page.getByTestId('button-selecionar-equipe-1').click();
   await expect(page.getByTestId('text-sessoes-1')).toContainText('1 sessão registrada');
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('mobile tables, registration dialog, and dossier stay within the viewport', async ({ page }) => {
+  const api = await mockRosterApi(page);
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+
+  const assertPageFits = async () => {
+    await expect.poll(() => page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    )).toBe(true);
+  };
+  const assertTableCanScrollHorizontally = async (testId: string) => {
+    const canScroll = await page.getByTestId(testId).locator('table').evaluate((table) => {
+      const scroller = table.parentElement;
+      return scroller !== null &&
+        getComputedStyle(scroller).overflowX === 'auto' &&
+        scroller.scrollWidth > scroller.clientWidth;
+    });
+    expect(canScroll, `${testId} should scroll inside its own container`).toBe(true);
+  };
+  const assertOverlayFits = async (testId: string) => {
+    const overlay = page.getByTestId(testId);
+    await expect.poll(async () => {
+      const viewport = page.viewportSize();
+      if (!viewport) return false;
+      return overlay.evaluate((element, size) => {
+        const rect = element.getBoundingClientRect();
+        return rect.left >= 0 &&
+          rect.top >= 0 &&
+          rect.right <= size.width &&
+          rect.bottom <= size.height;
+      }, viewport);
+    }).toBe(true);
+  };
+
+  for (const width of [320, 360, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await assertPageFits();
+    await assertTableCanScrollHorizontally('table-executive-teams');
+
+    await page.getByTestId('button-ver-dossie-1').click();
+    const dossier = page.getByTestId('drawer-dossie-equipe');
+    await expect(dossier).toBeVisible();
+    await assertOverlayFits('drawer-dossie-equipe');
+    await assertPageFits();
+    await page.getByTestId('button-fechar-dossie').click();
+    await expect(dossier).toBeHidden();
+
+    await page.getByRole('tab', { name: /Mentores/ }).click();
+    await expect(page.getByTestId('table-mentores')).toBeVisible();
+    await assertTableCanScrollHorizontally('table-mentores');
+    await assertPageFits();
+
+    await page.getByRole('tab', { name: /Equipes/ }).click();
+    await page.getByTestId('button-novo-registro').click();
+    const registration = page.getByTestId('modal-novo-registro');
+    await expect(registration).toBeVisible();
+    await assertOverlayFits('modal-novo-registro');
+    await assertPageFits();
+
+    const fieldHeader = page.getByTestId('field-header-teamFeedbackImprovements-registro');
+    const label = await fieldHeader.locator('label').boundingBox();
+    const counter = await fieldHeader.locator('span').boundingBox();
+    expect(label).not.toBeNull();
+    expect(counter).not.toBeNull();
+    const separated = label!.right <= counter!.x ||
+      counter!.right <= label!.x ||
+      label!.y + label!.height <= counter!.y ||
+      counter!.y + counter!.height <= label!.y;
+    expect(separated, 'field label and character count should not overlap').toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(registration).toBeHidden();
+  }
+
+  expect(api.unexpectedRequests, 'mobile interactions should use only the mocked API').toEqual([]);
 });
 
 test('conflicting student rename keeps the draft and offers to refresh the roster', async ({ page }) => {

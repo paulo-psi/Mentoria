@@ -444,7 +444,10 @@ function QualitativeField({
       name={name}
       render={({ field }) => (
         <FormItem className={className}>
-          <div className="flex items-baseline justify-between gap-2">
+          <div
+            className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2"
+            data-testid={`field-header-${name}-${testIdSuffix}`}
+          >
             <FormLabel className="text-xs font-semibold text-zinc-700">{label}</FormLabel>
             <span className="font-mono-ui text-[10px] tabular-nums text-zinc-400">{field.value.length}/5000</span>
           </div>

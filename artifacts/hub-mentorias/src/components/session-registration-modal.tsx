@@ -69,10 +69,10 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-3xl gap-0 overflow-hidden border-zinc-200 bg-zinc-50 p-0 text-zinc-900 shadow-2xl sm:rounded-2xl"
+        className="w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] max-w-3xl gap-0 overflow-hidden border-zinc-200 bg-zinc-50 p-0 text-zinc-900 shadow-2xl rounded-xl sm:w-full sm:max-h-[calc(100dvh-3rem)] sm:rounded-2xl"
         data-testid="modal-novo-registro"
       >
-        <DialogHeader className="shrink-0 border-b border-zinc-200 bg-white px-5 pb-5 pt-6 text-left sm:px-7">
+        <DialogHeader className="shrink-0 border-b border-zinc-200 bg-white px-4 pb-4 pt-5 text-left sm:px-7 sm:pb-5 sm:pt-6">
           <div className="flex items-start gap-3 pr-8">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-900 text-white">
               <CalendarPlus aria-hidden="true" size={18} />
@@ -90,7 +90,7 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
           </div>
         </DialogHeader>
 
-        <div className="min-h-0 max-h-[calc(100dvh-11rem)] overflow-y-auto px-5 py-5 sm:px-7 sm:py-6" data-testid="scroll-novo-registro">
+        <div className="min-h-0 max-h-[calc(100dvh-11rem)] overflow-y-auto px-4 py-4 sm:px-7 sm:py-6" data-testid="scroll-novo-registro">
           {!teams.length ? (
             <EmptyTeamsState />
           ) : (

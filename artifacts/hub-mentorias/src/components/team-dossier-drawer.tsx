@@ -79,7 +79,7 @@ export function TeamDossierDrawer({
         }}
         side="right"
       >
-        <SheetHeader className="shrink-0 border-b border-zinc-200 bg-white px-5 pb-5 pt-6 text-left sm:px-7">
+        <SheetHeader className="shrink-0 border-b border-zinc-200 bg-white px-4 pb-5 pt-5 text-left sm:px-7 sm:pt-6">
           <div className="flex items-start justify-between gap-5">
             <div className="min-w-0 pr-2">
               <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -114,13 +114,13 @@ export function TeamDossierDrawer({
 
           <div className="mt-5 flex flex-wrap items-center gap-2" data-testid="badges-dossie-equipe">
             <span
-              className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700"
+              className="inline-flex max-w-full whitespace-normal break-words rounded-full border border-zinc-200 bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700"
               data-testid="badge-estagio-equipe"
             >
               {team.currentStage || 'Estágio não definido'}
             </span>
             <span
-              className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700"
+              className="inline-flex min-w-0 max-w-full items-center gap-1.5 whitespace-normal break-words rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-700"
               data-testid="badge-mentor-principal"
             >
               <UserRound aria-hidden="true" size={12} />
@@ -131,7 +131,7 @@ export function TeamDossierDrawer({
 
         <div
           aria-label={`Histórico de sessões de ${team.name}`}
-          className="min-h-0 flex-1 overflow-y-auto bg-zinc-50/70 px-5 py-5 sm:px-7 sm:py-6"
+          className="min-h-0 flex-1 overflow-y-auto bg-zinc-50/70 px-4 py-5 sm:px-7 sm:py-6"
           data-testid="scroll-dossie-sessoes"
         >
           {query.isLoading ? (
