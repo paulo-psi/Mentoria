@@ -12,3 +12,4 @@
 - [OpenAPI date-only coercion](openapi-date-only.md) — generated Zod schemas coerce `format: date` strings to `Date`; preserve and strictly revalidate calendar-day values at the API boundary.
 - [Roster test helpers](roster-test-helpers.md) — keep object-return expressions attached to `return`; automatic semicolon insertion can silently invalidate fixture helpers.
 - [React Hook Form and Zod](react-hook-form-zod.md) — when resolver types cannot carry transformed output, validate string-valued controls and convert numbers at the API boundary.
+- [Mobile error-state E2E retries](playwright-mobile-error-retries.md) — failed React Query retries can temporarily unmount notices and delay settled-error assertions.

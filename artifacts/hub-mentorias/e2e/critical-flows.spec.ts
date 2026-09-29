@@ -1,7 +1,18 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { devices, expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import type { DashboardStats, MentorOption, Student, Team } from '@workspace/api-client-react';
 
-async function mockRosterApi(page: Page, canManage = true, { accessFails = false }: { accessFails?: boolean } = {}) {
+async function createTouchPage(browser: Browser) {
+  const baseURL = test.info().project.use.baseURL;
+  if (typeof baseURL !== 'string') throw new Error('The Playwright project must define a baseURL.');
+  const context = await browser.newContext({ ...devices['iPhone 13'], baseURL });
+  return { context, page: await context.newPage() };
+}
+
+async function mockRosterApi(
+  page: Page,
+  canManage = true,
+  { accessFails = false, teamsFail = false }: { accessFails?: boolean; teamsFail?: boolean } = {},
+) {
   const team: Team = {
     id: 1,
     name: 'Equipe Horizonte',
@@ -75,7 +86,14 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
     else if (method === 'GET' && pathname === '/api/healthz') data = { status: 'ok' };
     else if (method === 'GET' && pathname === '/api/health') data = { status: 'ok', database: 'connected' };
     else if (method === 'GET' && pathname === '/api/dashboard/stats') data = dashboardStats;
-    else if (method === 'GET' && pathname === '/api/teams') data = [team];
+    else if (method === 'GET' && pathname === '/api/teams') {
+      if (teamsFail) {
+        status = 503;
+        data = { error: 'Roster read unavailable' };
+      } else {
+        data = [team];
+      }
+    }
     else if (method === 'GET' && pathname === '/api/mentors') data = mentors;
     else if (method === 'GET' && pathname === '/api/teams/1/sessions') data = [];
     else if (method === 'GET' && pathname === '/api/roster-audit') data = [];
@@ -136,6 +154,43 @@ async function mockRosterApi(page: Page, canManage = true, { accessFails = false
   };
 }
 
+const mobileWidths = [320, 360, 390, 430];
+
+async function assertMobileNoticeFits(page: Page, notice: Locator, retryButton?: Locator) {
+  await expect(notice).toBeVisible();
+  await expect.poll(() => page.evaluate(
+    () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  )).toBe(true);
+
+  const layout = await notice.evaluate((element) => {
+    const viewportWidth = document.documentElement.clientWidth;
+    const rect = element.getBoundingClientRect();
+    const textFits = Array.from(element.querySelectorAll<HTMLElement>('h2, h3, p'))
+      .every((text) => {
+        const textRect = text.getBoundingClientRect();
+        return textRect.left >= 0 &&
+          textRect.right <= viewportWidth &&
+          text.scrollWidth <= text.clientWidth;
+      });
+    const button = element.querySelector('button');
+    const buttonRect = button?.getBoundingClientRect();
+    return {
+      sectionFits: rect.left >= 0 && rect.right <= viewportWidth,
+      textFits,
+      buttonFits: !buttonRect || (
+        buttonRect.left >= 0 &&
+        buttonRect.right <= viewportWidth &&
+        buttonRect.height >= 40
+      ),
+    };
+  });
+
+  expect(layout.sectionFits, 'maintenance notice should fit within the mobile viewport').toBe(true);
+  expect(layout.textFits, 'maintenance notice text should not be clipped or overflow').toBe(true);
+  expect(layout.buttonFits, 'retry action should fit and meet the 40px touch target').toBe(true);
+  if (retryButton) await expect(retryButton).toBeVisible();
+}
+
 test('signed-out visitor reaches sign-in but not the private roster', async ({ page }) => {
   const apiCalls: string[] = [];
   await page.route('**/api/**', async (route) => {
@@ -167,16 +222,22 @@ test('signed-in view-only user can see the roster but cannot open maintenance', 
 
   await page.goto('/manage');
   await expect(page).toHaveURL(/\/manage$/);
-  await expect(page.getByTestId('state-sem-permissao-manage')).toContainText('Manutenção restrita');
-  await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
-  await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
-  await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
-  await expect(page.getByTestId('button-salvar-sessao-1')).toHaveCount(0);
+  const restrictedNotice = page.getByTestId('state-sem-permissao-manage');
+  for (const width of mobileWidths) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(restrictedNotice).toContainText('Manutenção restrita');
+    await assertMobileNoticeFits(page, restrictedNotice);
+    await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
+    await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
+    await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
+    await expect(page.getByTestId('button-salvar-sessao-1')).toHaveCount(0);
+  }
   expect(api.mutationRequests, 'view-only navigation must not change the roster').toEqual([]);
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
 
-test('failed permission check keeps maintenance unavailable to a signed-in user', async ({ page }) => {
+test('failed permission check stays readable and retryable at mobile widths', async ({ browser }) => {
+  const { context, page } = await createTouchPage(browser);
   const api = await mockRosterApi(page, true, { accessFails: true });
 
   await page.goto('/');
@@ -192,15 +253,59 @@ test('failed permission check keeps maintenance unavailable to a signed-in user'
 
   await page.goto('/manage');
   await expect(page).toHaveURL(/\/manage$/);
-  await expect(page.getByTestId('state-sem-permissao-manage')).toContainText('Não foi possível conferir seu acesso.', { timeout: 15_000 });
-  await expect(page.getByTestId('state-sem-permissao-manage')).toContainText('A manutenção não está disponível enquanto a permissão não puder ser verificada.');
-  await expect(page.getByTestId('button-tentar-acesso')).toBeVisible();
-  await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
-  await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
-  await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
-  await expect(page.getByTestId('button-salvar-estudante-1')).toHaveCount(0);
-  await expect(page.getByTestId('button-editar-estudante-1')).toHaveCount(0);
+  const permissionNotice = page.getByTestId('state-sem-permissao-manage');
+  const retryAccess = page.getByTestId('button-tentar-acesso');
+  for (const width of mobileWidths) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(permissionNotice).toContainText('Não foi possível conferir seu acesso.', { timeout: 15_000 });
+    await expect(permissionNotice).toContainText('A manutenção não está disponível enquanto a permissão não puder ser verificada.');
+    await assertMobileNoticeFits(page, permissionNotice, retryAccess);
+    await expect(page.getByTestId('button-nova-equipe')).toHaveCount(0);
+    await expect(page.getByTestId('button-selecionar-equipe-1')).toHaveCount(0);
+    await expect(page.getByTestId('button-salvar-equipe')).toHaveCount(0);
+    await expect(page.getByTestId('button-salvar-estudante-1')).toHaveCount(0);
+    await expect(page.getByTestId('button-editar-estudante-1')).toHaveCount(0);
+
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  const accessRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/access' && response.status() === 503,
+  );
+  await retryAccess.tap();
+  await accessRetryResponse;
+  await context.close();
   expect(api.mutationRequests, 'a failed permission check must not change the roster').toEqual([]);
+  expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('failed team read stays readable and retryable at mobile widths', async ({ browser }) => {
+  const { context, page } = await createTouchPage(browser);
+  const api = await mockRosterApi(page, true, { teamsFail: true });
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await page.goto('/manage');
+
+  const readFailure = page.getByTestId('state-erro-manage');
+  const retryRead = page.getByTestId('button-atualizar-manage');
+  for (const width of mobileWidths) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(readFailure).toContainText('A relação não carregou.', { timeout: 15_000 });
+    await expect(readFailure).toContainText('Não é seguro editar sem os dados atuais. Tente atualizar a leitura.');
+    await assertMobileNoticeFits(page, readFailure, retryRead);
+
+  }
+  await page.setViewportSize({ width: 320, height: 844 });
+  const readRetryResponse = page.waitForResponse((response) =>
+    new URL(response.url()).pathname === '/api/teams' && response.status() === 503,
+  );
+  await retryRead.tap();
+  await readRetryResponse;
+
+  await context.close();
+  expect(api.mutationRequests, 'failed read retries must not change the roster').toEqual([]);
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
 });
 
