@@ -1,0 +1,38 @@
+### PRD TÉCNICO - PASSO 5.2: POLIMENTO VISUAL, RESPONSIVIDADE E PUBLICAÇÃO (DEPLOY)
+
+Atue como Engenheiro de Software Sênior e Arquiteto DevOps. Sua tarefa exclusiva neste passo é realizar o refinamento visual final da interface (garantindo responsividade e usabilidade) e preparar/executar a publicação (deploy) da aplicação para o ambiente de produção do Replit.
+
+---
+
+#### 1. OBJETIVO (JOB TO BE DONE)
+Realizar um pente-fino de UX/UI garantindo que a aplicação seja responsiva em dispositivos móveis (sem quebras de tabelas horizontais ou sobreposição de modais) e concluir o fluxo publicando o projeto de forma segura na infraestrutura de hospedagem do Replit, gerando a URL pública.
+
+---
+
+#### 2. STACK E PADRÕES TÉCNICOS
+- **Gerenciador de Pacotes:** `pnpm`.
+- **Frontend:** React, Tailwind CSS (utilizando classes responsivas como `sm:`, `md:`, `lg:` e containers com `overflow-x-auto` para tabelas).
+- **Infraestrutura/Deploy:** Ferramentas nativas de publicação do Replit (Deployments).
+- **Variáveis de Ambiente:** Garantir que as chaves de API, segredos do Clerk (autenticação) e a `DATABASE_URL` do PostgreSQL estejam corretamente mapeadas para o ambiente de produção.
+
+---
+
+#### 3. MODELAGEM DE DADOS E TIPAGEM
+- **Nenhuma alteração no esquema de banco de dados.** A base e os contratos OpenAPI permanecem congelados e idênticos aos do Passo 5.1.
+
+---
+
+#### 4. CRITÉRIOS DE ACEITE (DEFINITION OF DONE)
+- [ ] A tabela de Equipes e a tabela de Mentores possuem rolagem horizontal fluida (`overflow-x-auto`) em telas de smartphones, não quebrando o layout da página.
+- [ ] O modal de "Novo Registro" e a gaveta lateral (Drawer) de "Dossiê" se adaptam corretamente às dimensões de telas menores (ajustes de `width`, `padding` e margens).
+- [ ] O comando de *build* (`pnpm run build` ou equivalente) finaliza gerando os artefatos estáticos prontos para produção.
+- [ ] O processo de Publicação (Deploy) foi configurado e iniciado no Replit.
+- [ ] O sistema agora possui uma URL de produção ativa e acessível.
+
+---
+
+#### 5. FORA DE ESCOPO (NÃO IMPLEMENTAR NESTE PASSO)
+- NÃO crie novas funcionalidades de negócio ou novas rotas.
+- NÃO altere a modelagem do banco de dados (Drizzle ORM).
+- NÃO adicione novos campos aos formulários ou telas.
+- NÃO altere a lógica central de autenticação do Clerk.
