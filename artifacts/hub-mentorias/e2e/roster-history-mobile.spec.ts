@@ -111,6 +111,16 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
 
   let historyRequests = 0;
   let retryAllowed = false;
+  let teamHistoryResponse: unknown = [];
+  let holdFilteredRetryResponse = false;
+  let signalFilteredRetryStarted!: () => void;
+  let releaseFilteredRetryResponse!: () => void;
+  const filteredRetryStarted = new Promise<void>((resolve) => {
+    signalFilteredRetryStarted = resolve;
+  });
+  const filteredRetryCanFinish = new Promise<void>((resolve) => {
+    releaseFilteredRetryResponse = resolve;
+  });
   const historyFilters: Array<{ teamId: string | null; studentId: string | null }> = [];
   const unexpectedRequests: string[] = [];
 
@@ -146,14 +156,11 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
           actorEmail: 'admin@example.com',
         }];
       } else if (teamId === '2' && studentId === null) {
-        data = [{
-          id: 2,
-          teamId: 2,
-          studentId: null,
-          summary: 'Equipe Aurora atualizada',
-          createdAt: '2026-03-05T12:00:00.000Z',
-          actorEmail: 'admin@example.com',
-        }];
+        if (holdFilteredRetryResponse) {
+          signalFilteredRetryStarted();
+          await filteredRetryCanFinish;
+        }
+        data = teamHistoryResponse;
       } else if (teamId === null && studentId === null) {
         data = [{
           id: 1,
@@ -220,20 +227,49 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await refreshRetryResponse;
   await expect(historyList).toContainText('Equipe Horizonte criada');
 
-  retryAllowed = false;
   const teamFilter = history.getByTestId('filtro-historico-equipe');
+  retryAllowed = true;
+  teamHistoryResponse = [{
+    id: 2,
+    teamId: 2,
+    studentId: null,
+    summary: 'Equipe Aurora registrada',
+    createdAt: '2026-03-05T12:00:00.000Z',
+    actorEmail: 'admin@example.com',
+  }];
+  const initialFilteredResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '2' &&
+      response.status() === 200;
+  });
   await teamFilter.fill('2');
+  await initialFilteredResponse;
+  await expect(historyList).toContainText('Equipe Aurora registrada');
+
+  retryAllowed = false;
+  await history.getByRole('button', { name: 'Atualizar histórico' }).click();
   await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
-  await expect(alert).toContainText('sem filtros');
-  await expect(historyList).toContainText('Equipe Horizonte criada');
+  await expect(alert).toContainText('equipe #2');
+  await expect(historyList).toContainText('Equipe Aurora registrada');
+  await expect(historyList).not.toContainText('Equipe Horizonte criada');
   await expect(teamFilter).toHaveValue('2');
   await expect(history.getByTestId('filtro-historico-estudante')).toHaveValue('');
   const failedTeamRequests = historyFilters.filter((filter) => filter.teamId === '2');
-  expect(failedTeamRequests.length, 'the selected team query should fail before showing retry').toBeGreaterThanOrEqual(4);
+  expect(failedTeamRequests.length, 'the filtered query should succeed before its update fails').toBeGreaterThanOrEqual(5);
   expect(failedTeamRequests.every((filter) => filter.studentId === null)).toBe(true);
   await assertHistoryErrorFitsAtMobileWidths(page, '2');
 
   retryAllowed = true;
+  teamHistoryResponse = [{
+    id: 3,
+    teamId: 2,
+    studentId: null,
+    summary: 'Equipe Aurora atualizada',
+    createdAt: '2026-03-06T12:00:00.000Z',
+    actorEmail: 'admin@example.com',
+  }];
+  holdFilteredRetryResponse = true;
   const filteredRetryResponse = page.waitForResponse((response) => {
     const requestUrl = new URL(response.url());
     return requestUrl.pathname === '/api/roster-audit' &&
@@ -241,10 +277,15 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       response.status() === 200;
   });
   await retry.click();
+  await filteredRetryStarted;
+  await expect(historyList).toContainText('Equipe Aurora registrada');
+  await expect(historyList).not.toContainText('Equipe Aurora atualizada');
+  releaseFilteredRetryResponse();
   await filteredRetryResponse;
   await expect(historyList).toBeVisible();
   await expect(historyList).toContainText('Equipe Aurora atualizada');
   await expect(historyList).toContainText('Equipe #2');
+  await expect(historyList).not.toContainText('Equipe Aurora registrada');
   await expect(historyList).not.toContainText('Equipe Horizonte criada');
   await expect(historyList.locator('li')).toHaveCount(1);
   expect(historyFilters.at(-1)).toEqual({ teamId: '2', studentId: null });
