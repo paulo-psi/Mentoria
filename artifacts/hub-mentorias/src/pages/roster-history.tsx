@@ -86,7 +86,11 @@ export function RosterHistory({ team }: { team?: Team }) {
               Equipe #{event.teamId}{event.studentId !== null ? ` · Estudante #${event.studentId}` : ''} · {new Date(event.createdAt).toLocaleString('pt-BR')} · {event.actorEmail}
             </div>
           </li>)}
-        </ol> : visibleHistory ? <p className="mt-5 text-xs text-muted-foreground" data-testid="historico-vazio">Nenhuma alteração registrada para este filtro.</p> : null}
+        </ol> : visibleHistory ? <p className="mt-5 text-xs text-muted-foreground" data-testid="historico-vazio">
+          {history.isError || history.isFetching
+            ? `Nenhuma alteração registrada na última consulta (${describeHistoryFilters(visibleHistory.filters)}).`
+            : 'Nenhuma alteração registrada para este filtro.'}
+        </p> : null}
       </>}
       <button type="button" className="mt-4 inline-flex min-h-10 items-center text-xs font-semibold text-primary underline" onClick={() => void queryClient.invalidateQueries({ queryKey: getGetRosterAuditQueryKey() })}>Atualizar histórico</button>
     </section>

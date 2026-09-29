@@ -136,6 +136,15 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       if (!retryAllowed) {
         status = 503;
         data = { error: 'History temporarily unavailable' };
+      } else if (teamId === '4' && studentId === null) {
+        data = [{
+          id: 4,
+          teamId: 4,
+          studentId: null,
+          summary: 'Equipe Ipê atualizada',
+          createdAt: '2026-03-06T12:00:00.000Z',
+          actorEmail: 'admin@example.com',
+        }];
       } else if (teamId === '2' && studentId === null) {
         data = [{
           id: 2,
@@ -241,4 +250,36 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   expect(historyFilters.at(-1)).toEqual({ teamId: '2', studentId: null });
   await expect(teamFilter).toHaveValue('2');
   expect(unexpectedRequests, 'the flow should use only the mocked API').toEqual([]);
+
+  retryAllowed = true;
+  const emptyResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '3' &&
+      response.status() === 200;
+  });
+  await teamFilter.fill('3');
+  await emptyResponse;
+  const emptyHistory = history.getByTestId('historico-vazio');
+  await expect(emptyHistory).toHaveText('Nenhuma alteração registrada para este filtro.');
+
+  retryAllowed = false;
+  await teamFilter.fill('4');
+  await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
+  await expect(alert).toContainText('equipe #3');
+  await expect(emptyHistory).toHaveText('Nenhuma alteração registrada na última consulta (equipe #3).');
+  await expect(teamFilter).toHaveValue('4');
+
+  retryAllowed = true;
+  const emptyStateRetryResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '4' &&
+      response.status() === 200;
+  });
+  await retry.click();
+  await emptyStateRetryResponse;
+  await expect(history.getByTestId('lista-historico')).toContainText('Equipe Ipê atualizada');
+  await expect(history.getByTestId('historico-vazio')).toHaveCount(0);
+  expect(historyFilters.at(-1)).toEqual({ teamId: '4', studentId: null });
 });
