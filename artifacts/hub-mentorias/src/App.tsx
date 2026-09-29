@@ -21,11 +21,13 @@ import {
   getGetAccessPermissionsQueryKey,
   getGetDashboardStatsQueryKey,
   getGetHealthQueryKey,
+  getGetMentorsQueryKey,
   getGetTeamsQueryKey,
   getHealthCheckQueryKey,
   useGetHealth,
   useGetAccessPermissions,
   useGetDashboardStats,
+  useGetMentors,
   useGetTeams,
   useHealthCheck,
 } from '@workspace/api-client-react';
@@ -51,7 +53,9 @@ import {
 } from './auth';
 import { DashboardKpis } from '@/components/dashboard-kpis';
 import { TeamsExecutiveTable, TeamsTableSkeleton } from '@/components/teams-executive-table';
+import { MentorsTable, MentorsTableSkeleton } from '@/components/mentors-table';
 import { SessionRegistrationModal } from '@/components/session-registration-modal';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const queryClient = new QueryClient();
 
@@ -66,8 +70,12 @@ function normalizeSearchText(value: string): string {
 }
 
 export function Home() {
-  const [search, setSearch] = useState('');
+  const [teamSearch, setTeamSearch] = useState('');
+  const [mentorSearch, setMentorSearch] = useState('');
   const [registrationOpen, setRegistrationOpen] = useState(false);
+  const [activeView, setActiveView] = useState('teams');
+  const search = activeView === 'teams' ? teamSearch : mentorSearch;
+  const setActiveSearch = activeView === 'teams' ? setTeamSearch : setMentorSearch;
   const access = useGetAccessPermissions({
     query: {
       queryKey: getGetAccessPermissionsQueryKey(),
@@ -93,6 +101,13 @@ export function Home() {
       staleTime: 30_000,
     },
   });
+  const mentors = useGetMentors({
+    query: {
+      queryKey: getGetMentorsQueryKey(),
+      staleTime: 30_000,
+      refetchOnMount: 'always',
+    },
+  });
   const dashboardStats = useGetDashboardStats({
     query: {
       queryKey: getGetDashboardStatsQueryKey(),
@@ -102,14 +117,24 @@ export function Home() {
 
   const filteredTeams = useMemo(() => {
     const source = teams.data ?? [];
-    const normalizedSearch = normalizeSearchText(search.trim());
+    const normalizedSearch = normalizeSearchText(teamSearch.trim());
     if (!normalizedSearch) return source;
     return source.filter((team) =>
       [team.name, team.mainMentor.name, ...team.students.map((student) => student.name)].some(
         (name) => normalizeSearchText(name).includes(normalizedSearch),
       ),
     );
-  }, [search, teams.data]);
+  }, [teamSearch, teams.data]);
+  const filteredMentors = useMemo(() => {
+    const source = mentors.data ?? [];
+    const normalizedSearch = normalizeSearchText(mentorSearch.trim());
+    if (!normalizedSearch) return source;
+    return source.filter((mentor) =>
+      [mentor.name, mentor.email ?? '', mentor.expertiseArea ?? '', mentor.mentorType ?? ''].some(
+        (value) => normalizeSearchText(value).includes(normalizedSearch),
+      ),
+    );
+  }, [mentorSearch, mentors.data]);
 
   const apiAvailable = healthCheck.data?.status === 'ok';
   const connected =
@@ -123,6 +148,7 @@ export function Home() {
     void healthCheck.refetch();
     void health.refetch();
     void teams.refetch();
+    void mentors.refetch();
     void access.refetch();
     void dashboardStats.refetch();
   };
@@ -137,7 +163,9 @@ export function Home() {
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold leading-tight text-zinc-900">Hub de Mentorias</span>
-              <span className="mt-1 block text-xs text-zinc-500">Ciclo Ativo • 8 Equipes</span>
+              <span className="mt-1 block text-xs text-zinc-500">
+                Ciclo Ativo • {teams.data ? `${teams.data.length} Equipes` : 'Carregando equipes…'}
+              </span>
             </span>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
@@ -153,7 +181,7 @@ export function Home() {
               type="button"
             >
               <RefreshCw
-                className={health.isFetching || teams.isFetching || dashboardStats.isFetching ? 'animate-spin' : ''}
+                className={health.isFetching || teams.isFetching || mentors.isFetching || dashboardStats.isFetching ? 'animate-spin' : ''}
                 size={14}
               />
               Atualizar
@@ -182,23 +210,41 @@ export function Home() {
           onRetry={() => void dashboardStats.refetch()}
         />
 
-        <section aria-labelledby="heading-equipes" className="font-inter">
+        <Tabs className="font-inter" onValueChange={setActiveView} value={activeView}>
+        <section aria-labelledby={activeView === 'teams' ? 'heading-equipes' : 'heading-mentores'} className="font-inter">
           <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
-              <h2
-                className="text-base font-semibold text-zinc-900"
-                data-testid="text-equipes-heading"
-                id="heading-equipes"
-              >
-                Equipes em Acompanhamento
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500" data-testid="text-equipes-count">
-                {teams.isLoading
-                  ? 'Carregando startups…'
-                  : teams.isError
-                    ? 'A lista de equipes está indisponível'
-                    : `${teams.data?.length ?? 0} startups ativas no ciclo`}
-              </p>
+              {activeView === 'teams' ? (
+                <>
+                  <h2
+                    className="text-base font-semibold text-zinc-900"
+                    data-testid="text-equipes-heading"
+                    id="heading-equipes"
+                  >
+                    Equipes em Acompanhamento
+                  </h2>
+                  <p className="mt-1 text-xs text-zinc-500" data-testid="text-equipes-count">
+                    {teams.isLoading
+                      ? 'Carregando startups…'
+                      : teams.isError
+                        ? 'A lista de equipes está indisponível'
+                        : `${teams.data?.length ?? 0} startups ativas no ciclo`}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-base font-semibold text-zinc-900" id="heading-mentores">
+                    Painel de Mentores
+                  </h2>
+                  <p className="mt-1 text-xs text-zinc-500" data-testid="text-mentores-count">
+                    {mentors.isLoading
+                      ? 'Carregando mentores…'
+                      : mentors.isError
+                        ? 'A lista de mentores está indisponível'
+                        : `${mentors.data?.length ?? 0} mentores cadastrados`}
+                  </p>
+                </>
+              )}
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div
@@ -219,17 +265,21 @@ export function Home() {
                     ? 'Verificando conexão'
                     : 'API Indisponível'}
               </div>
-              <label className="relative block w-full sm:w-[242px]">
+              <label className="relative block w-full sm:w-[280px]">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
                   size={15}
                 />
                 <input
                   className="h-10 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-xs text-zinc-800 outline-none transition-shadow placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
-                  aria-label="Buscar equipe, mentor ou estudante"
-                  data-testid="input-buscar-equipes"
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar equipe, mentor ou estudante"
+                  aria-label={activeView === 'teams'
+                    ? 'Buscar equipe, mentor ou estudante'
+                    : 'Buscar mentor, e-mail ou especialidade'}
+                  data-testid={activeView === 'teams' ? 'input-buscar-equipes' : 'input-buscar-mentores'}
+                  onChange={(event) => setActiveSearch(event.target.value)}
+                  placeholder={activeView === 'teams'
+                    ? 'Buscar equipe, mentor ou estudante'
+                    : 'Buscar mentor, e-mail ou especialidade'}
                   type="search"
                   value={search}
                 />
@@ -237,16 +287,44 @@ export function Home() {
             </div>
           </div>
 
-          {teams.isLoading ? (
-            <TeamsTableSkeleton />
-          ) : teams.isError ? (
-            accessDenied ? <AccessDeniedState /> : <ErrorState onRetry={refreshAll} />
-          ) : filteredTeams.length === 0 ? (
-            <EmptyState hasSearch={Boolean(search)} onClear={() => setSearch('')} />
-          ) : (
-            <TeamsExecutiveTable teams={filteredTeams} />
-          )}
+          <TabsList aria-label="Visões do painel" className="mb-1 h-auto rounded-lg border border-zinc-200 bg-white p-1">
+            <TabsTrigger className="gap-2 px-3 py-2 text-xs data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900" value="teams">
+              Equipes
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] tabular-nums text-zinc-600" data-testid="count-tab-equipes">
+                {teams.isLoading ? '…' : teams.data?.length ?? 0}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger className="gap-2 px-3 py-2 text-xs data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900" value="mentors">
+              Mentores
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] tabular-nums text-zinc-600" data-testid="count-tab-mentores">
+                {mentors.isLoading ? '…' : mentors.data?.length ?? 0}
+              </span>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent className="mt-4" value="teams">
+            {teams.isLoading ? (
+              <TeamsTableSkeleton />
+            ) : teams.isError ? (
+              accessDenied ? <AccessDeniedState /> : <ErrorState onRetry={refreshAll} />
+            ) : filteredTeams.length === 0 ? (
+              <EmptyState hasSearch={Boolean(teamSearch)} onClear={() => setTeamSearch('')} />
+            ) : (
+              <TeamsExecutiveTable teams={filteredTeams} />
+            )}
+          </TabsContent>
+          <TabsContent className="mt-4" value="mentors">
+            {mentors.isLoading ? (
+              <MentorsTableSkeleton />
+            ) : mentors.isError ? (
+              mentors.error?.status === 403 ? <AccessDeniedState /> : <MentorsErrorState onRetry={() => void mentors.refetch()} />
+            ) : filteredMentors.length === 0 ? (
+              <MentorsEmptyState hasSearch={Boolean(mentorSearch)} onClear={() => setMentorSearch('')} />
+            ) : (
+              <MentorsTable mentors={filteredMentors} />
+            )}
+          </TabsContent>
         </section>
+        </Tabs>
       </main>
       {canManage && (
         <SessionRegistrationModal
@@ -254,6 +332,44 @@ export function Home() {
           onOpenChange={setRegistrationOpen}
           teams={teams.data ?? []}
         />
+      )}
+    </div>
+  );
+}
+
+function MentorsErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="rounded-xl border border-red-200 bg-white px-6 py-12 text-center" data-testid="state-erro-mentores" role="alert">
+      <CircleAlert className="mx-auto mb-4 text-red-600" size={25} />
+      <h3 className="text-base font-semibold text-zinc-900">Os mentores não carregaram.</h3>
+      <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">
+        Atualize a leitura para tentar carregar a lista novamente.
+      </p>
+      <button
+        className="mt-5 inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800"
+        onClick={onRetry}
+        type="button"
+      >
+        <RefreshCw size={14} /> Tentar novamente
+      </button>
+    </div>
+  );
+}
+
+function MentorsEmptyState({ hasSearch, onClear }: { hasSearch: boolean; onClear: () => void }) {
+  return (
+    <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-14 text-center" data-testid="state-vazio-mentores">
+      <UsersRound className="mx-auto mb-4 text-zinc-400" size={25} />
+      <h3 className="text-base font-semibold text-zinc-900">
+        {hasSearch ? 'Nenhum mentor encontrado.' : 'Nenhum mentor cadastrado.'}
+      </h3>
+      <p className="mt-2 text-xs leading-5 text-zinc-500">
+        {hasSearch ? 'Tente outro nome, e-mail ou especialidade.' : 'Quando houver mentores, eles aparecerão aqui.'}
+      </p>
+      {hasSearch && (
+        <button className="mt-5 text-xs font-semibold text-zinc-700 underline underline-offset-4" onClick={onClear} type="button">
+          Limpar busca
+        </button>
       )}
     </div>
   );

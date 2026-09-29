@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { Team, TeamSessionHistoryItem } from '@workspace/api-client-react';
+import type { MentorOption, Team, TeamSessionHistoryItem } from '@workspace/api-client-react';
 import {
   buildMentoringSessionPayload,
   mentoringSessionInputSchema,
@@ -107,6 +107,29 @@ const roster: Team[] = [
   },
 ];
 
+const mentorOptions: MentorOption[] = [
+  {
+    id: 1,
+    name: 'João Araújo',
+    email: 'joao@example.org',
+    expertiseArea: 'Educação & Produto',
+    mentorType: 'interno',
+    totalSessions: 3,
+    avgNpsReceived: 8.7,
+    assignedTeamsCount: 2,
+  },
+  {
+    id: 2,
+    name: 'Márcia Évora',
+    email: null,
+    expertiseArea: 'Saúde & Produto',
+    mentorType: null,
+    totalSessions: 0,
+    avgNpsReceived: null,
+    assignedTeamsCount: 0,
+  },
+];
+
 const longMentorAssessment =
   'Parecer integral sobre a maturidade e as entregas da equipe, com evidências e recomendações detalhadas. '.repeat(
     80,
@@ -161,10 +184,7 @@ beforeEach(() => {
     refetch: vi.fn(),
   });
   getMentors.mockReturnValue({
-    data: [
-      { id: 1, name: 'João Araújo' },
-      { id: 2, name: 'Márcia Évora' },
-    ],
+    data: mentorOptions,
     isError: false,
     isFetching: false,
     isLoading: false,
@@ -197,6 +217,81 @@ beforeEach(() => {
     isError: false,
     isFetching: false,
     refetch: vi.fn(),
+  });
+});
+
+describe('visão consolidada de mentores', () => {
+  it('alternates between teams and mentor metrics without reloading and searches the mentor list', async () => {
+    const user = userEvent.setup();
+    render(<Home />);
+
+    expect(screen.getByRole('tab', { name: /Equipes/ })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: /Mentores/ })).toBeTruthy();
+    expect(screen.getByTestId('count-tab-equipes').textContent).toBe('2');
+    expect(screen.getByTestId('count-tab-mentores').textContent).toBe('2');
+    expect(screen.getByTestId('table-executive-teams')).toBeTruthy();
+
+    await user.click(screen.getByRole('tab', { name: /Mentores/ }));
+
+    expect(screen.getByRole('heading', { name: 'Painel de Mentores' })).toBeTruthy();
+    expect(screen.getByTestId('text-mentores-count').textContent).toBe('2 mentores cadastrados');
+    expect(screen.getByTestId('table-mentores')).toBeTruthy();
+    const firstRow = screen.getByTestId('row-mentor-1');
+    expect(within(firstRow).getByText('joao@example.org')).toBeTruthy();
+    expect(within(firstRow).getByText('Educação & Produto')).toBeTruthy();
+    expect(within(firstRow).getByTestId('text-sessoes-mentor-1').textContent).toBe('3 sessões');
+    expect(within(firstRow).getByTestId('text-nps-mentor-1').textContent).toContain('8,7');
+    expect(within(firstRow).getByTestId('text-equipes-mentor-1').textContent).toBe('2 equipes');
+    expect(within(screen.getByTestId('row-mentor-2')).getByText('Sem avaliações')).toBeTruthy();
+
+    const searchInput = screen.getByRole('searchbox', { name: 'Buscar mentor, e-mail ou especialidade' });
+    await user.type(searchInput, 'joao@example.org');
+    expect(screen.getByTestId('row-mentor-1')).toBeTruthy();
+    expect(screen.queryByTestId('row-mentor-2')).toBeNull();
+
+    await user.click(screen.getByRole('tab', { name: /Equipes/ }));
+    expect(screen.getByTestId('table-executive-teams')).toBeTruthy();
+    expect(screen.queryByTestId('table-mentores')).toBeNull();
+  });
+
+  it('shows loading, retryable error, empty-list, and no-search-result states', async () => {
+    const retry = vi.fn();
+    getMentors.mockReturnValue({
+      data: undefined,
+      isError: false,
+      isFetching: true,
+      isLoading: true,
+      refetch: retry,
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(<Home />);
+    await user.click(screen.getByRole('tab', { name: /Mentores/ }));
+    expect(screen.getByTestId('loading-mentores')).toBeTruthy();
+
+    getMentors.mockReturnValue({
+      data: undefined,
+      error: { status: 503 },
+      isError: true,
+      isFetching: false,
+      isLoading: false,
+      refetch: retry,
+    });
+    rerender(<Home />);
+    expect(screen.getByTestId('state-erro-mentores')).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    getMentors.mockReturnValue({
+      data: [],
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: retry,
+    });
+    rerender(<Home />);
+    expect(screen.getByText('Nenhum mentor cadastrado.')).toBeTruthy();
+    await user.type(screen.getByRole('searchbox', { name: 'Buscar mentor, e-mail ou especialidade' }), 'inexistente');
+    expect(screen.getByText('Nenhum mentor encontrado.')).toBeTruthy();
   });
 });
 

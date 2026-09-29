@@ -37,7 +37,7 @@ import
 
 import 
 {
- and, eq 
+ asc, and, eq 
 }
  from "drizzle-orm"
 ;
@@ -67,6 +67,9 @@ import healthRoutes,
 ;
 
 import dashboardRoutes from "../src/routes/dashboard"
+;
+
+import accessRoutes from "../src/routes/access"
 ;
 
 import 
@@ -176,7 +179,7 @@ async function start({ seed = true }: { seed?: boolean } = {}) {
 )
 ;
 
-  app.use("/api", healthRoutes, listRoutes, teamRoutes, dashboardRoutes, studentRoutes)
+  app.use("/api", healthRoutes, listRoutes, teamRoutes, dashboardRoutes, studentRoutes, accessRoutes)
 ;
 
   server = app.listen(0)
@@ -2562,6 +2565,84 @@ test("team list reports separate session counts for official teams", async () =>
   }
 });
 
+
+test("mentor list requires approved access and aggregates sessions per mentor", async () => {
+  await clearRosterTables();
+  try {
+    await seedDatabase();
+    const officialTeams = await db.select({ id: teamsTable.id }).from(teamsTable).orderBy(asc(teamsTable.id)).limit(2);
+    assert.equal(officialTeams.length, 2, "the official roster must include at least two teams");
+
+    const [mentor] = await db.insert(mentorsTable).values({
+      name: "Mentor agregado",
+      email: "agregado@example.org",
+      expertiseArea: "Estratégia",
+      mentorType: "externo",
+    }).returning();
+    assert.ok(mentor);
+
+    const sessionValues = [
+      { teamId: officialTeams[0].id, teamNps: 8, sessionDate: "2026-03-01" },
+      { teamId: officialTeams[0].id, teamNps: 9, sessionDate: "2026-03-08" },
+      { teamId: officialTeams[1].id, teamNps: 9, sessionDate: "2026-03-15" },
+    ].map(({ teamId, teamNps, sessionDate }) => ({
+      teamId,
+      mentorId: mentor.id,
+      sessionType: "principal",
+      sessionDate,
+      teamNps,
+      teamActionability: 8,
+      mentorCommitment: 8,
+      mentorTraction: 8,
+      teamFeedbackStrongPoints: "Boa colaboração.",
+      teamFeedbackImprovements: "Ampliar a validação.",
+      agreedNextSteps: "Planejar o próximo ciclo.",
+      mentorQualitativeAssessment: "Acompanhamento consistente.",
+    }));
+    await db.insert(mentoringSessionsTable).values(sessionValues);
+
+    await start({ seed: false });
+    assert.equal((await request("GET", "/mentors")).status, 401);
+    assert.equal((await request("GET", "/mentors", undefined, "other")).status, 403);
+
+    const response = await request("GET", "/mentors", undefined, "reader");
+    assert.equal(response.status, 200);
+    const rows = response.body as Array<{
+      id: number;
+      name: string;
+      email: string | null;
+      expertiseArea: string | null;
+      mentorType: string | null;
+      totalSessions: number;
+      avgNpsReceived: number | null;
+      assignedTeamsCount: number;
+    }>;
+    const sortedNames = rows.map(({ name }) => name);
+    assert.deepEqual(sortedNames, [...sortedNames].sort((a, b) => a.localeCompare(b)));
+
+    const aggregate = rows.find(({ id }) => id === mentor.id);
+    assert.ok(aggregate);
+    assert.deepEqual(aggregate, {
+      id: mentor.id,
+      name: "Mentor agregado",
+      email: "agregado@example.org",
+      expertiseArea: "Estratégia",
+      mentorType: "externo",
+      totalSessions: 3,
+      avgNpsReceived: 8.7,
+      assignedTeamsCount: 2,
+    });
+
+    const noSessions = rows.find(({ name }) => name !== mentor.name);
+    assert.ok(noSessions);
+    assert.equal(noSessions.totalSessions, 0);
+    assert.equal(noSessions.avgNpsReceived, null);
+    assert.equal(noSessions.assignedTeamsCount, 0);
+  } finally {
+    await stop();
+    await clearRosterTables();
+  }
+});
 
 test("dashboard stats require approved access and return zeroes without sessions", async () => {
   await clearRosterTables();
