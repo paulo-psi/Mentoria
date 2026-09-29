@@ -1,5 +1,72 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { DashboardStats, MentorOption, Team } from '@workspace/api-client-react';
+
+async function assertHistoryErrorFitsAtMobileWidths(page: Page, expectedTeamId?: string) {
+  const history = page.getByTestId('historico-relacao');
+  const alert = history.getByRole('alert');
+  const retry = alert.getByRole('button', { name: 'Tentar novamente' });
+
+  for (const width of [320, 360, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(alert).toBeVisible();
+    await expect(retry).toBeVisible();
+    if (expectedTeamId !== undefined) {
+      await expect(history.getByTestId('filtro-historico-equipe')).toHaveValue(expectedTeamId);
+      await expect(history.getByTestId('filtro-historico-estudante')).toHaveValue('');
+    }
+    await retry.scrollIntoViewIfNeeded();
+
+    const layout = await alert.evaluate((element) => {
+      const alertRect = element.getBoundingClientRect();
+      const messageRange = document.createRange();
+      messageRange.selectNodeContents(element.firstChild ?? element);
+      const messageLines = Array.from(messageRange.getClientRects()).map((rect) => ({
+        left: rect.left,
+        right: rect.right,
+      }));
+      const button = element.querySelector('button');
+      const buttonRect = button?.getBoundingClientRect();
+      return {
+        alert: {
+          left: alertRect.left,
+          right: alertRect.right,
+          top: alertRect.top,
+          bottom: alertRect.bottom,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          scrollHeight: element.scrollHeight,
+          clientHeight: element.clientHeight,
+        },
+        messageLines,
+        button: buttonRect ? {
+          left: buttonRect.left,
+          right: buttonRect.right,
+          top: buttonRect.top,
+          bottom: buttonRect.bottom,
+          height: buttonRect.height,
+        } : null,
+      };
+    });
+
+    expect(layout.alert.left).toBeGreaterThanOrEqual(0);
+    expect(layout.alert.right).toBeLessThanOrEqual(width);
+    expect(layout.alert.top).toBeGreaterThanOrEqual(0);
+    expect(layout.alert.bottom).toBeLessThanOrEqual(844);
+    expect(layout.alert.scrollWidth).toBeLessThanOrEqual(layout.alert.clientWidth);
+    expect(layout.alert.scrollHeight).toBeLessThanOrEqual(layout.alert.clientHeight);
+    expect(layout.messageLines.length, 'the full error message should be laid out').toBeGreaterThan(0);
+    for (const line of layout.messageLines) {
+      expect(line.left).toBeGreaterThanOrEqual(layout.alert.left - 1);
+      expect(line.right).toBeLessThanOrEqual(layout.alert.right + 1);
+    }
+    expect(layout.button, 'retry button should remain present').not.toBeNull();
+    expect(layout.button!.left).toBeGreaterThanOrEqual(0);
+    expect(layout.button!.right).toBeLessThanOrEqual(width);
+    expect(layout.button!.top).toBeGreaterThanOrEqual(0);
+    expect(layout.button!.bottom).toBeLessThanOrEqual(844);
+    expect(layout.button!.height).toBeGreaterThanOrEqual(40);
+  }
+}
 
 test('mobile roster history error stays readable and retry recovers', async ({ page }) => {
   test.setTimeout(90_000);
@@ -44,10 +111,12 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
 
   let historyRequests = 0;
   let retryAllowed = false;
+  const historyFilters: Array<{ teamId: string | null; studentId: string | null }> = [];
   const unexpectedRequests: string[] = [];
 
   await page.route('**/api/**', async (route) => {
-    const { pathname } = new URL(route.request().url());
+    const requestUrl = new URL(route.request().url());
+    const { pathname } = requestUrl;
     const method = route.request().method();
     let status = 200;
     let data: unknown;
@@ -61,9 +130,21 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
     else if (method === 'GET' && pathname === '/api/teams/1/sessions') data = [];
     else if (method === 'GET' && pathname === '/api/roster-audit') {
       historyRequests += 1;
+      const teamId = requestUrl.searchParams.get('teamId');
+      const studentId = requestUrl.searchParams.get('studentId');
+      historyFilters.push({ teamId, studentId });
       if (!retryAllowed) {
         status = 503;
         data = { error: 'History temporarily unavailable' };
+      } else if (teamId === '1' && studentId === null) {
+        data = [{
+          id: 1,
+          teamId: 1,
+          studentId: null,
+          summary: 'Equipe Horizonte atualizada',
+          createdAt: '2026-03-05T12:00:00.000Z',
+          actorEmail: 'admin@example.com',
+        }];
       } else {
         data = [];
       }
@@ -90,63 +171,7 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await expect(alert).toContainText('Não foi possível consultar o histórico.', { timeout: 45_000 });
   await expect(retry).toBeVisible();
   expect(historyRequests, 'the failed query should exhaust its automatic attempts').toBeGreaterThanOrEqual(4);
-
-  for (const width of [320, 360, 390, 430]) {
-    await page.setViewportSize({ width, height: 844 });
-    await retry.scrollIntoViewIfNeeded();
-
-    const layout = await alert.evaluate((element) => {
-      const alertRect = element.getBoundingClientRect();
-      const messageRange = document.createRange();
-      messageRange.selectNodeContents(element.firstChild ?? element);
-      const messageLines = Array.from(messageRange.getClientRects()).map((rect) => ({
-        left: rect.left,
-        right: rect.right,
-        top: rect.top,
-        bottom: rect.bottom,
-      }));
-      const button = element.querySelector('button');
-      const buttonRect = button?.getBoundingClientRect();
-      return {
-        alert: {
-          left: alertRect.left,
-          right: alertRect.right,
-          top: alertRect.top,
-          bottom: alertRect.bottom,
-          scrollWidth: element.scrollWidth,
-          clientWidth: element.clientWidth,
-          scrollHeight: element.scrollHeight,
-          clientHeight: element.clientHeight,
-        },
-        messageLines,
-        button: buttonRect ? {
-          left: buttonRect.left,
-          right: buttonRect.right,
-          top: buttonRect.top,
-          bottom: buttonRect.bottom,
-          height: buttonRect.height,
-        } : null,
-      };
-    });
-
-    expect(layout.alert.left).toBeGreaterThanOrEqual(0);
-    expect(layout.alert.right).toBeLessThanOrEqual(width);
-    expect(layout.alert.top).toBeGreaterThanOrEqual(0);
-    expect(layout.alert.bottom).toBeLessThanOrEqual(844);
-    expect(layout.alert.scrollWidth).toBeLessThanOrEqual(layout.alert.clientWidth);
-    expect(layout.alert.scrollHeight).toBeLessThanOrEqual(layout.alert.clientHeight);
-    expect(layout.messageLines.length, 'the full error message should be laid out').toBeGreaterThan(0);
-    for (const line of layout.messageLines) {
-      expect(line.left).toBeGreaterThanOrEqual(layout.alert.left - 1);
-      expect(line.right).toBeLessThanOrEqual(layout.alert.right + 1);
-    }
-    expect(layout.button, 'retry button should remain present').not.toBeNull();
-    expect(layout.button!.left).toBeGreaterThanOrEqual(0);
-    expect(layout.button!.right).toBeLessThanOrEqual(width);
-    expect(layout.button!.top).toBeGreaterThanOrEqual(0);
-    expect(layout.button!.bottom).toBeLessThanOrEqual(844);
-    expect(layout.button!.height).toBeGreaterThanOrEqual(40);
-  }
+  await assertHistoryErrorFitsAtMobileWidths(page);
 
   retryAllowed = true;
   const retryResponse = page.waitForResponse((response) =>
@@ -156,5 +181,33 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await retryResponse;
   await expect(history.getByTestId('historico-vazio')).toBeVisible();
   expect(historyRequests, 'retry should issue another history request').toBeGreaterThanOrEqual(5);
+
+  retryAllowed = false;
+  const teamFilter = history.getByTestId('filtro-historico-equipe');
+  await teamFilter.fill('1');
+  await expect(alert).toContainText('Não foi possível consultar o histórico.', { timeout: 45_000 });
+  await expect(teamFilter).toHaveValue('1');
+  await expect(history.getByTestId('filtro-historico-estudante')).toHaveValue('');
+  const failedTeamRequests = historyFilters.filter((filter) => filter.teamId === '1');
+  expect(failedTeamRequests.length, 'the selected team query should fail before showing retry').toBeGreaterThanOrEqual(4);
+  expect(failedTeamRequests.every((filter) => filter.studentId === null)).toBe(true);
+  await assertHistoryErrorFitsAtMobileWidths(page, '1');
+
+  retryAllowed = true;
+  const filteredRetryResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '1' &&
+      response.status() === 200;
+  });
+  await retry.click();
+  await filteredRetryResponse;
+  const historyList = history.getByTestId('lista-historico');
+  await expect(historyList).toBeVisible();
+  await expect(historyList).toContainText('Equipe Horizonte atualizada');
+  await expect(historyList).toContainText('Equipe #1');
+  await expect(historyList.locator('li')).toHaveCount(1);
+  expect(historyFilters.at(-1)).toEqual({ teamId: '1', studentId: null });
+  await expect(teamFilter).toHaveValue('1');
   expect(unexpectedRequests, 'the flow should use only the mocked API').toEqual([]);
 });
