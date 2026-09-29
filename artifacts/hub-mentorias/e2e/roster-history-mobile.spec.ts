@@ -323,4 +323,40 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await expect(history.getByTestId('lista-historico')).toContainText('Equipe Ipê atualizada');
   await expect(history.getByTestId('historico-vazio')).toHaveCount(0);
   expect(historyFilters.at(-1)).toEqual({ teamId: '4', studentId: null });
+
+  const emptyBaselineResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '5' &&
+      response.status() === 200;
+  });
+  await teamFilter.fill('5');
+  await emptyBaselineResponse;
+  await expect(history.getByTestId('historico-vazio')).toHaveText('Nenhuma alteração registrada para este filtro.');
+
+  retryAllowed = false;
+  await teamFilter.fill('6');
+  await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
+  await expect(alert).toContainText('equipe #5');
+  await expect(history.getByTestId('historico-vazio'))
+    .toHaveText('Nenhuma alteração registrada na última consulta (equipe #5).');
+  await expect(teamFilter).toHaveValue('6');
+
+  retryAllowed = true;
+  const emptyRetryResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('teamId') === '6' &&
+      response.status() === 200;
+  });
+  await retry.click();
+  await emptyRetryResponse;
+  await expect(alert).toHaveCount(0);
+  await expect(history.getByTestId('historico-vazio'))
+    .toHaveText('Nenhuma alteração registrada para este filtro.');
+  await expect(history.getByTestId('historico-vazio')).not.toContainText('equipe #5');
+  await expect(history.getByTestId('historico-vazio')).not.toContainText('equipe #6');
+  await expect(history.getByTestId('lista-historico')).toHaveCount(0);
+  await expect(teamFilter).toHaveValue('6');
+  expect(historyFilters.at(-1)).toEqual({ teamId: '6', studentId: null });
 });
