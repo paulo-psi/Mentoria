@@ -136,13 +136,22 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       if (!retryAllowed) {
         status = 503;
         data = { error: 'History temporarily unavailable' };
-      } else if (teamId === '1' && studentId === null) {
+      } else if (teamId === '2' && studentId === null) {
+        data = [{
+          id: 2,
+          teamId: 2,
+          studentId: null,
+          summary: 'Equipe Aurora atualizada',
+          createdAt: '2026-03-05T12:00:00.000Z',
+          actorEmail: 'admin@example.com',
+        }];
+      } else if (teamId === null && studentId === null) {
         data = [{
           id: 1,
           teamId: 1,
           studentId: null,
-          summary: 'Equipe Horizonte atualizada',
-          createdAt: '2026-03-05T12:00:00.000Z',
+          summary: 'Equipe Horizonte criada',
+          createdAt: '2026-03-04T12:00:00.000Z',
           actorEmail: 'admin@example.com',
         }];
       } else {
@@ -179,35 +188,57 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   );
   await retry.click();
   await retryResponse;
-  await expect(history.getByTestId('historico-vazio')).toBeVisible();
+  const historyList = history.getByTestId('lista-historico');
+  await expect(historyList).toBeVisible();
+  await expect(historyList).toContainText('Equipe Horizonte criada');
   expect(historyRequests, 'retry should issue another history request').toBeGreaterThanOrEqual(5);
 
   retryAllowed = false;
+  await history.getByRole('button', { name: 'Atualizar histórico' }).click();
+  await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
+  await expect(alert).toContainText('sem filtros');
+  await expect(historyList).toContainText('Equipe Horizonte criada');
+  await assertHistoryErrorFitsAtMobileWidths(page);
+
+  retryAllowed = true;
+  const refreshRetryResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.size === 0 &&
+      response.status() === 200;
+  });
+  await retry.click();
+  await refreshRetryResponse;
+  await expect(historyList).toContainText('Equipe Horizonte criada');
+
+  retryAllowed = false;
   const teamFilter = history.getByTestId('filtro-historico-equipe');
-  await teamFilter.fill('1');
-  await expect(alert).toContainText('Não foi possível consultar o histórico.', { timeout: 45_000 });
-  await expect(teamFilter).toHaveValue('1');
+  await teamFilter.fill('2');
+  await expect(alert).toContainText('Não foi possível atualizar o histórico.', { timeout: 45_000 });
+  await expect(alert).toContainText('sem filtros');
+  await expect(historyList).toContainText('Equipe Horizonte criada');
+  await expect(teamFilter).toHaveValue('2');
   await expect(history.getByTestId('filtro-historico-estudante')).toHaveValue('');
-  const failedTeamRequests = historyFilters.filter((filter) => filter.teamId === '1');
+  const failedTeamRequests = historyFilters.filter((filter) => filter.teamId === '2');
   expect(failedTeamRequests.length, 'the selected team query should fail before showing retry').toBeGreaterThanOrEqual(4);
   expect(failedTeamRequests.every((filter) => filter.studentId === null)).toBe(true);
-  await assertHistoryErrorFitsAtMobileWidths(page, '1');
+  await assertHistoryErrorFitsAtMobileWidths(page, '2');
 
   retryAllowed = true;
   const filteredRetryResponse = page.waitForResponse((response) => {
     const requestUrl = new URL(response.url());
     return requestUrl.pathname === '/api/roster-audit' &&
-      requestUrl.searchParams.get('teamId') === '1' &&
+      requestUrl.searchParams.get('teamId') === '2' &&
       response.status() === 200;
   });
   await retry.click();
   await filteredRetryResponse;
-  const historyList = history.getByTestId('lista-historico');
   await expect(historyList).toBeVisible();
-  await expect(historyList).toContainText('Equipe Horizonte atualizada');
-  await expect(historyList).toContainText('Equipe #1');
+  await expect(historyList).toContainText('Equipe Aurora atualizada');
+  await expect(historyList).toContainText('Equipe #2');
+  await expect(historyList).not.toContainText('Equipe Horizonte criada');
   await expect(historyList.locator('li')).toHaveCount(1);
-  expect(historyFilters.at(-1)).toEqual({ teamId: '1', studentId: null });
-  await expect(teamFilter).toHaveValue('1');
+  expect(historyFilters.at(-1)).toEqual({ teamId: '2', studentId: null });
+  await expect(teamFilter).toHaveValue('2');
   expect(unexpectedRequests, 'the flow should use only the mocked API').toEqual([]);
 });
