@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "zhWQUMytApwVMpfJ6edmj"
+uri = "file://AUDITORIA_HUB_MENTORIAS.md"
+type = "text"
+title = "Relatório de auditoria do Hub de Mentorias"
+description = "Achados priorizados de segurança, funcionamento, acessibilidade e qualidade, com evidências, validações e limitações."
+logical_id = "99c936d9-59b4-4a82-97a5-c61a4f5377fa"
+content_hash = "sha256:fa76788de6b46bbbc7c5bd93f719b567e5e30dedbb489e209c25bd35af1a9ae7"
+size = 12443
+mtime_ms = 1790731264917
+storage_uri = "gcs://replit-rams-assets-reed/rams/assets/repl:54c58cac-2550-4815-89ac-eaed9859a63a/99c936d9-59b4-4a82-97a5-c61a4f5377fa/a5ab0bb3-2be9-46e7-8942-6dff171a203f"
+storage_version_token = "1790731303981848"
+content_type = "text/markdown"
