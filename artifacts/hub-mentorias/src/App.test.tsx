@@ -59,6 +59,7 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 vi.mock('./auth', () => ({
+  AccountSettingsPage: () => null,
   UserProfileButton: () => null,
 }));
 

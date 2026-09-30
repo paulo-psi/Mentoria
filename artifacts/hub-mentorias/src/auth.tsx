@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
-import { SignIn, SignUp, UserButton, useClerk } from '@clerk/react';
+import { Show, SignIn, SignUp, UserButton, UserProfile, useClerk } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, LockKeyhole, LogOut, Waypoints } from 'lucide-react';
-import { Link } from 'wouter';
+import { ArrowLeft, ArrowRight, LockKeyhole, LogOut, Waypoints } from 'lucide-react';
+import { Link, Redirect } from 'wouter';
 
 export const clerkPubKey = publishableKeyFromHost(
   window.location.hostname,
@@ -71,6 +71,16 @@ export const clerkAppearance = {
     otpCodeFieldInput: 'border border-[#d5d2c8] text-[#213b3d]',
     formFieldRow: 'text-[#213b3d]',
     main: 'text-[#213b3d]',
+  },
+};
+
+export const clerkProfileAppearance = {
+  ...clerkAppearance,
+  elements: {
+    ...clerkAppearance.elements,
+    rootBox: 'w-full min-w-0 flex justify-center',
+    cardBox:
+      '!w-full min-w-0 !max-w-none overflow-hidden rounded-2xl border border-[#d5d2c8] bg-[#fdfcf9] shadow-sm',
   },
 };
 
@@ -144,7 +154,56 @@ export function PublicHome() {
 }
 
 export function UserProfileButton() {
-  return <UserButton />;
+  return (
+    <UserButton
+      userProfileMode="navigation"
+      userProfileUrl={`${basePath}/account`}
+      userProfileProps={{ appearance: clerkProfileAppearance }}
+    />
+  );
+}
+
+export function AccountSettingsPage() {
+  return (
+    <>
+      <Show when="signed-in">
+        <div className="grain min-h-[100dvh] bg-background px-4 py-6 text-foreground sm:px-8 sm:py-10">
+          <div className="mx-auto w-full max-w-[1080px]">
+            <Link
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href="/user-portal"
+            >
+              <ArrowLeft aria-hidden="true" size={16} />
+              Voltar ao painel
+            </Link>
+
+            <header className="mt-6 max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                Conta do Hub
+              </p>
+              <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Minha conta e segurança
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+                Atualize seus dados, endereços de e-mail, métodos de acesso e opções de segurança.
+              </p>
+            </header>
+
+            <section aria-label="Configurações da conta" className="mt-7 w-full min-w-0">
+              <UserProfile
+                appearance={clerkProfileAppearance}
+                path={`${basePath}/account`}
+                routing="path"
+              />
+            </section>
+          </div>
+        </div>
+      </Show>
+      <Show when="signed-out">
+        <Redirect to="/" />
+      </Show>
+    </>
+  );
 }
 
 export function LogoutButton() {

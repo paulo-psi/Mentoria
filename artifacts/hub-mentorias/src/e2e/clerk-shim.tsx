@@ -76,6 +76,17 @@ export function UserButton() {
           <button
             className="rounded-md px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100"
             onClick={() => {
+              setOpen(false);
+              navigate('/account');
+            }}
+            role="menuitem"
+            type="button"
+          >
+            Gerenciar conta
+          </button>
+          <button
+            className="rounded-md px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100"
+            onClick={() => {
               signOut();
               navigate('/');
             }}
@@ -87,6 +98,21 @@ export function UserButton() {
         </div>
       )}
     </div>
+  );
+}
+
+export function UserProfile() {
+  return (
+    <section
+      aria-label="Configurações da conta"
+      className="w-full min-w-0 rounded-xl border border-zinc-200 bg-white p-5"
+      data-testid="clerk-user-profile"
+    >
+      <h2 className="text-lg font-semibold text-zinc-900">Conta e segurança</h2>
+      <p className="mt-2 text-sm text-zinc-600">
+        Perfil, endereços de e-mail, segurança e contas conectadas.
+      </p>
+    </section>
   );
 }
 

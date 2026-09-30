@@ -40,6 +40,7 @@ import {
   Router as WouterRouter,
 } from 'wouter';
 import {
+  AccountSettingsPage,
   basePath,
   clerkAppearance,
   clerkProxyUrl,
@@ -435,6 +436,7 @@ function Router() {
       <Switch>
         <Route path="/" component={HomeRedirect} />
         <Route path="/user-portal" component={UserPortal} />
+        <Route path="/account/*?" component={AccountSettingsPage} />
         <Route path="/manage" component={ManageRoute} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
