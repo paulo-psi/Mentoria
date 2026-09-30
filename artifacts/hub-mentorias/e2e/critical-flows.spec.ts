@@ -466,14 +466,17 @@ test('mobile maintenance forms fit and remain usable at narrow widths', async ({
   await page.getByRole('link', { name: 'Entrar', exact: true }).click();
   await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
   await expect(page).toHaveURL(/\/user-portal$/);
+  await expect(page.getByTestId('text-app-brand')).toHaveText('HUB de Mentorias PIBEP PUCPR');
   await page.goto('/manage');
   await expect(page.getByTestId('button-nova-equipe')).toBeVisible();
+  await expect(page.getByTestId('badge-admin-context')).toHaveText('Área administrativa');
 
   const assertPageFits = async () => {
     await expect.poll(() => page.evaluate(
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     )).toBe(true);
   };
+  await assertPageFits();
   const assertControlsFit = async (scope: Locator) => {
     await expect.poll(() => scope.evaluate((element) => {
       const viewportWidth = document.documentElement.clientWidth;

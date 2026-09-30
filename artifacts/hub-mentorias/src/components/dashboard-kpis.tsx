@@ -25,9 +25,9 @@ type MetricCardProps = {
 
 export function DashboardKpis({ data, isError, isLoading, onRetry }: DashboardKpisProps) {
   return (
-    <section aria-labelledby="dashboard-kpis-heading" className="font-inter mb-10">
+    <section aria-labelledby="dashboard-kpis-heading" className="mb-10">
       <h2
-        className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-400"
+        className="mb-4 font-display text-2xl tracking-[-0.035em] text-foreground"
         data-testid="text-dashboard-kpis-heading"
         id="dashboard-kpis-heading"
       >
@@ -44,27 +44,27 @@ export function DashboardKpis({ data, isError, isLoading, onRetry }: DashboardKp
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               aria-hidden="true"
-              className="h-28 animate-pulse rounded-xl border border-zinc-200 bg-zinc-100"
+              className="h-28 animate-pulse rounded-xl border border-border bg-muted"
               key={index}
             />
           ))}
         </div>
       ) : isError || !data ? (
         <div
-          className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
           data-testid="state-kpis-erro"
           role="alert"
         >
           <div>
-            <p className="text-sm font-semibold text-zinc-800">
+            <p className="text-sm font-semibold text-foreground">
               Métricas temporariamente indisponíveis.
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               Tente atualizar a leitura do ciclo em instantes.
             </p>
           </div>
           <button
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             data-testid="button-tentar-novamente-kpis"
             onClick={onRetry}
             type="button"
@@ -111,22 +111,22 @@ export function DashboardKpis({ data, isError, isLoading, onRetry }: DashboardKp
 function MetricCard({ id, label, value, detail, icon: Icon }: MetricCardProps) {
   return (
     <article
-      className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+      className="rounded-2xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
       data-testid={`card-kpi-${id}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-zinc-500">{label}</p>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon aria-hidden="true" size={16} />
         </span>
       </div>
       <div className="mt-3 flex items-baseline gap-1.5">
-        <p className="text-2xl font-bold tracking-tight text-zinc-900" data-testid={`value-kpi-${id}`}>
+        <p className="text-2xl font-bold tracking-tight text-foreground" data-testid={`value-kpi-${id}`}>
           {value}
         </p>
-        <span className="text-xs text-zinc-400">{detail === '/ 10' ? detail : ''}</span>
+        <span className="text-xs text-muted-foreground">{detail === '/ 10' ? detail : ''}</span>
       </div>
-      {detail !== '/ 10' && <p className="mt-1 text-xs text-zinc-500">{detail}</p>}
+      {detail !== '/ 10' && <p className="mt-1 text-xs text-muted-foreground">{detail}</p>}
     </article>
   );
 }

@@ -10,12 +10,12 @@ import NotFound from '@/pages/not-found';
 import {
   CheckCircle2,
   CircleAlert,
-  Layers,
   Plus,
   Settings2,
   RefreshCw,
   Search,
   UsersRound,
+  Waypoints,
 } from 'lucide-react';
 import {
   getGetAccessPermissionsQueryKey,
@@ -155,28 +155,30 @@ export function Home() {
   };
 
   return (
-    <div className="grain min-h-[100dvh] w-full bg-zinc-50 text-zinc-900">
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 shadow-sm backdrop-blur">
-        <div className="font-inter mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-3 px-5 py-3 sm:px-8 sm:py-4">
+    <div className="grain min-h-[100dvh] w-full bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-card/95 shadow-sm backdrop-blur">
+        <div className="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-white">
-              <Layers size={19} />
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Waypoints aria-hidden="true" size={19} />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold leading-tight text-zinc-900">Hub de Mentorias</span>
-              <span className="mt-1 block text-xs text-zinc-500">
-                Ciclo Ativo • {teams.data ? `${teams.data.length} Equipes` : 'Carregando equipes…'}
+              <span className="block font-display text-base leading-tight sm:text-lg" data-testid="text-app-brand">
+                HUB de Mentorias PIBEP PUCPR
+              </span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Ciclo ativo · {teams.data ? `${teams.data.length} equipes` : 'Carregando equipes…'}
               </span>
             </span>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {!access.isError && access.data?.canManage === true && (
-              <Link href="/manage" className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100" data-testid="link-manter-equipes">
-                <Settings2 size={14} /> <span>Manter equipes</span>
+              <Link href="/manage" className="flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15" data-testid="link-manter-equipes">
+                <Settings2 aria-hidden="true" size={14} /> <span>Manter equipes</span>
               </Link>
             )}
             <button
-              className="flex items-center gap-2 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
               data-testid="button-atualizar"
               onClick={refreshAll}
               type="button"
@@ -189,7 +191,7 @@ export function Home() {
             </button>
             <button
               aria-label={canManage ? 'Novo registro' : 'Novo registro, disponível em uma próxima etapa'}
-              className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:cursor-default disabled:opacity-100"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-60"
               data-testid="button-novo-registro"
               disabled={!canManage}
               onClick={() => setRegistrationOpen(true)}
@@ -202,7 +204,7 @@ export function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1080px] px-5 pb-12 pt-10 sm:px-8">
+        <main className="mx-auto max-w-[1080px] px-5 pb-16 pt-8 sm:px-8 sm:pt-10">
         <h1 className="sr-only">Painel de mentorias do PIBEP 2026</h1>
         <DashboardKpis
           data={dashboardStats.data}
@@ -211,20 +213,20 @@ export function Home() {
           onRetry={() => void dashboardStats.refetch()}
         />
 
-        <Tabs className="font-inter" onValueChange={setActiveView} value={activeView}>
-        <section aria-labelledby={activeView === 'teams' ? 'heading-equipes' : 'heading-mentores'} className="font-inter">
+        <Tabs onValueChange={setActiveView} value={activeView}>
+        <section aria-labelledby={activeView === 'teams' ? 'heading-equipes' : 'heading-mentores'}>
           <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               {activeView === 'teams' ? (
                 <>
                   <h2
-                    className="text-base font-semibold text-zinc-900"
+                    className="font-display text-2xl tracking-[-0.035em] text-foreground"
                     data-testid="text-equipes-heading"
                     id="heading-equipes"
                   >
                     Equipes em Acompanhamento
                   </h2>
-                  <p className="mt-1 text-xs text-zinc-500" data-testid="text-equipes-count">
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="text-equipes-count">
                     {teams.isLoading
                       ? 'Carregando startups…'
                       : teams.isError
@@ -234,10 +236,10 @@ export function Home() {
                 </>
               ) : (
                 <>
-                  <h2 className="text-base font-semibold text-zinc-900" id="heading-mentores">
+                  <h2 className="font-display text-2xl tracking-[-0.035em] text-foreground" id="heading-mentores">
                     Painel de Mentores
                   </h2>
-                  <p className="mt-1 text-xs text-zinc-500" data-testid="text-mentores-count">
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="text-mentores-count">
                     {mentors.isLoading
                       ? 'Carregando mentores…'
                       : mentors.isError
@@ -251,10 +253,10 @@ export function Home() {
               <div
                 className={`inline-flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-xs font-semibold ${
                   connected
-                    ? 'bg-emerald-100 text-emerald-800'
+                    ? 'bg-primary/10 text-primary'
                     : health.isLoading || healthCheck.isLoading
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-red-100 text-red-800'
+                      ? 'bg-accent/35 text-accent-foreground'
+                      : 'bg-destructive/10 text-destructive'
                 }`}
                 data-testid="status-api"
                 role="status"
@@ -268,11 +270,11 @@ export function Home() {
               </div>
               <label className="relative block w-full sm:w-[280px]">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+                  className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                   size={15}
                 />
                 <input
-                  className="h-10 w-full rounded-md border border-zinc-200 bg-white pl-9 pr-3 text-xs text-zinc-800 outline-none transition-shadow placeholder:text-zinc-400 focus:ring-2 focus:ring-zinc-900/10"
+                  className="h-10 w-full rounded-lg border border-input bg-card pl-9 pr-3 text-xs text-foreground outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/15"
                   aria-label={activeView === 'teams'
                     ? 'Buscar equipe, mentor ou estudante'
                     : 'Buscar mentor, e-mail ou especialidade'}
@@ -288,16 +290,16 @@ export function Home() {
             </div>
           </div>
 
-          <TabsList aria-label="Visões do painel" className="mb-1 h-auto rounded-lg border border-zinc-200 bg-white p-1">
-            <TabsTrigger className="gap-2 px-3 py-2 text-xs data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900" value="teams">
+          <TabsList aria-label="Visões do painel" className="mb-1 h-auto rounded-lg border border-border bg-card p-1">
+            <TabsTrigger className="gap-2 px-3 py-2 text-xs text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-foreground" value="teams">
               Equipes
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] tabular-nums text-zinc-600" data-testid="count-tab-equipes">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground" data-testid="count-tab-equipes">
                 {teams.isLoading ? '…' : teams.data?.length ?? 0}
               </span>
             </TabsTrigger>
-            <TabsTrigger className="gap-2 px-3 py-2 text-xs data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900" value="mentors">
+            <TabsTrigger className="gap-2 px-3 py-2 text-xs text-muted-foreground data-[state=active]:bg-primary/10 data-[state=active]:text-foreground" value="mentors">
               Mentores
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] tabular-nums text-zinc-600" data-testid="count-tab-mentores">
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] tabular-nums text-muted-foreground" data-testid="count-tab-mentores">
                 {mentors.isLoading ? '…' : mentors.data?.length ?? 0}
               </span>
             </TabsTrigger>
@@ -340,14 +342,14 @@ export function Home() {
 
 function MentorsErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="rounded-xl border border-red-200 bg-white px-6 py-12 text-center" data-testid="state-erro-mentores" role="alert">
-      <CircleAlert className="mx-auto mb-4 text-red-600" size={25} />
-      <h3 className="text-base font-semibold text-zinc-900">Os mentores não carregaram.</h3>
-      <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-zinc-500">
+    <div className="rounded-2xl border border-destructive/25 bg-card px-6 py-12 text-center" data-testid="state-erro-mentores" role="alert">
+      <CircleAlert className="mx-auto mb-4 text-destructive" size={25} />
+      <h3 className="font-display text-2xl tracking-[-0.03em]">Os mentores não carregaram.</h3>
+      <p className="mx-auto mt-2 max-w-sm text-xs leading-5 text-muted-foreground">
         Atualize a leitura para tentar carregar a lista novamente.
       </p>
       <button
-        className="mt-5 inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-zinc-800"
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
         onClick={onRetry}
         type="button"
       >
@@ -359,16 +361,16 @@ function MentorsErrorState({ onRetry }: { onRetry: () => void }) {
 
 function MentorsEmptyState({ hasSearch, onClear }: { hasSearch: boolean; onClear: () => void }) {
   return (
-    <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-14 text-center" data-testid="state-vazio-mentores">
-      <UsersRound className="mx-auto mb-4 text-zinc-400" size={25} />
-      <h3 className="text-base font-semibold text-zinc-900">
+    <div className="rounded-2xl border border-dashed border-border bg-card/50 px-6 py-14 text-center" data-testid="state-vazio-mentores">
+      <UsersRound className="mx-auto mb-4 text-muted-foreground" size={25} />
+      <h3 className="font-display text-2xl tracking-[-0.03em]">
         {hasSearch ? 'Nenhum mentor encontrado.' : 'Nenhum mentor cadastrado.'}
       </h3>
-      <p className="mt-2 text-xs leading-5 text-zinc-500">
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
         {hasSearch ? 'Tente outro nome, e-mail ou especialidade.' : 'Quando houver mentores, eles aparecerão aqui.'}
       </p>
       {hasSearch && (
-        <button className="mt-5 text-xs font-semibold text-zinc-700 underline underline-offset-4" onClick={onClear} type="button">
+        <button className="mt-5 text-xs font-semibold text-primary underline underline-offset-4" onClick={onClear} type="button">
           Limpar busca
         </button>
       )}

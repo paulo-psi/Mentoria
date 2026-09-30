@@ -62,13 +62,23 @@ export default function ManagePage() {
 
   return (
     <div className="grain min-h-[100dvh] bg-background text-foreground">
-      <header className="border-b border-border/70 bg-card/70">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8 sm:py-5">
           <Link href="/user-portal" className="flex min-w-0 items-center gap-3" data-testid="link-voltar-relacao-cabecalho">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Waypoints size={19} /></span>
             <span className="font-display text-lg leading-tight sm:text-xl">HUB de Mentorias PIBEP PUCPR</span>
           </Link>
-          <LogoutButton />
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            <span
+              aria-label="Área administrativa"
+              className="inline-flex min-h-9 items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 text-[11px] font-semibold text-primary"
+              data-testid="badge-admin-context"
+            >
+              <LockKeyhole aria-hidden="true" size={14} />
+              Área administrativa
+            </span>
+            <LogoutButton />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-[1080px] px-5 pb-16 pt-8 sm:px-8 sm:pt-10">
