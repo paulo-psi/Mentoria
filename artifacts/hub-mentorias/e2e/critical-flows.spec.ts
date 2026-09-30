@@ -392,14 +392,64 @@ test('mobile tables, registration dialog, and dossier stay within the viewport',
       () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
     )).toBe(true);
   };
-  const assertTableCanScrollHorizontally = async (testId: string) => {
-    const canScroll = await page.getByTestId(testId).locator('table').evaluate((table) => {
-      const scroller = table.parentElement;
-      return scroller !== null &&
-        getComputedStyle(scroller).overflowX === 'auto' &&
-        scroller.scrollWidth > scroller.clientWidth;
+  const assertTableCanScrollHorizontally = async (
+    testId: string,
+    tableLabel: string,
+    rowTestId: string,
+    identity: string,
+  ) => {
+    const card = page.getByTestId(testId);
+    const region = card.getByTestId(`${testId}-scroll-region`);
+    const hint = card.getByTestId(`${testId}-scroll-hint`);
+    const table = card.getByRole('table');
+    await expect(table).toBeVisible();
+    await expect(table.getByRole('columnheader').first()).toHaveAttribute('scope', 'col');
+    await expect(region).toHaveAttribute('role', 'region');
+    await expect(region).toHaveAttribute('aria-label', tableLabel);
+    await expect(region).toHaveAttribute('tabindex', '0');
+    await expect(hint).toBeVisible();
+    await expect(hint).toContainText('Deslize para ver mais colunas');
+    await expect(region).toHaveAttribute('aria-describedby', await hint.getAttribute('id') ?? '');
+
+    const canScroll = await region.evaluate((scroller) =>
+      getComputedStyle(scroller).overflowX === 'auto' &&
+      scroller.scrollWidth > scroller.clientWidth,
+    );
+    expect(canScroll, `${testId} should scroll inside its own region`).toBe(true);
+    await expect(region).toHaveCSS('touch-action', 'pan-x');
+
+    const row = card.getByTestId(rowTestId);
+    const identityName = row.locator('td:first-child p').first();
+    await expect(identityName).toHaveText(identity);
+    const identityFits = await identityName.evaluate((element) => {
+      const styles = getComputedStyle(element);
+      return styles.whiteSpace === 'normal' &&
+        styles.textOverflow !== 'ellipsis' &&
+        element.scrollWidth <= element.clientWidth + 1;
     });
-    expect(canScroll, `${testId} should scroll inside its own container`).toBe(true);
+    expect(identityFits, `${testId} should not truncate row identity`).toBe(true);
+    await region.evaluate((scroller) => {
+      scroller.scrollLeft = scroller.scrollWidth;
+    });
+    const stickyIdentityOffset = await region.evaluate((scroller, rowId) => {
+      const firstCell = document.querySelector<HTMLElement>(`[data-testid="${rowId}"] td:first-child`);
+      return firstCell
+        ? firstCell.getBoundingClientRect().left - scroller.getBoundingClientRect().left
+        : Number.POSITIVE_INFINITY;
+    }, rowTestId);
+    expect(stickyIdentityOffset, `${testId} should keep its first column visible`).toBeGreaterThanOrEqual(0);
+    expect(stickyIdentityOffset, `${testId} should pin its first column to the scroll region`).toBeLessThanOrEqual(2);
+    await expect(row.locator('td').first()).toContainText(identity);
+
+    await region.evaluate((scroller) => {
+      scroller.scrollLeft = 0;
+    });
+
+    await region.focus();
+    await region.press('ArrowRight');
+    await expect.poll(() => region.evaluate((scroller) => scroller.scrollLeft)).toBeGreaterThan(0);
+    await region.press('ArrowLeft');
+    await expect.poll(() => region.evaluate((scroller) => scroller.scrollLeft)).toBe(0);
   };
   const assertOverlayFits = async (testId: string) => {
     const overlay = page.getByTestId(testId);
@@ -419,7 +469,13 @@ test('mobile tables, registration dialog, and dossier stay within the viewport',
   for (const width of [320, 360, 390, 430]) {
     await page.setViewportSize({ width, height: 844 });
     await assertPageFits();
-    await assertTableCanScrollHorizontally('table-executive-teams');
+    await assertTableCanScrollHorizontally(
+      'table-executive-teams',
+      'Tabela de equipes',
+      'row-equipe-1',
+      'Equipe Horizonte',
+    );
+    await assertPageFits();
 
     await page.getByTestId('button-ver-dossie-1').click();
     const dossier = page.getByTestId('drawer-dossie-equipe');
@@ -431,7 +487,12 @@ test('mobile tables, registration dialog, and dossier stay within the viewport',
 
     await page.getByRole('tab', { name: /Mentores/ }).click();
     await expect(page.getByTestId('table-mentores')).toBeVisible();
-    await assertTableCanScrollHorizontally('table-mentores');
+    await assertTableCanScrollHorizontally(
+      'table-mentores',
+      'Tabela de mentores',
+      'row-mentor-1',
+      'Mentora de Teste',
+    );
     await assertPageFits();
 
     await page.getByRole('tab', { name: /Equipes/ }).click();

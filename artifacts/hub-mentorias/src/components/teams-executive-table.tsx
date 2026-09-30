@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { Team } from '@workspace/api-client-react';
 import { Calendar, ChevronRight, FileText, Share2 } from 'lucide-react';
 import { TeamDossierDrawer } from '@/components/team-dossier-drawer';
+import { HorizontalTableViewport } from '@/components/horizontal-table-viewport';
 
 type TeamsExecutiveTableProps = {
   teams: Team[];
@@ -49,13 +50,15 @@ export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
       className="max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
       data-testid="table-executive-teams"
     >
-      <div className="max-w-full touch-pan-x overflow-x-auto overscroll-x-contain">
+      <HorizontalTableViewport tableLabel="Tabela de equipes" testId="table-executive-teams">
         <table className="w-full min-w-[1040px] table-fixed text-left text-xs text-foreground">
           <thead className="bg-muted/70 text-[11px] font-semibold text-muted-foreground">
             <tr>
               {columns.map((column, index) => (
                 <th
-                  className="px-3 py-3"
+                  className={index === 0
+                    ? 'sticky left-0 z-20 border-r border-border/70 bg-muted px-3 py-3'
+                    : 'px-3 py-3'}
                   key={column}
                   scope="col"
                   style={{ width: ['22%', '12%', '18%', '13%', '12%', '15%', '8%'][index] }}
@@ -68,13 +71,13 @@ export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
           <tbody className="divide-y divide-border/70">
             {teams.map((team) => (
               <tr
-                className="transition-colors hover:bg-muted/50"
+                className="group transition-colors hover:bg-muted/50"
                 data-testid={`row-equipe-${team.id}`}
                 key={team.id}
               >
-                <td className="px-3 py-3.5 align-middle">
+                <td className="sticky left-0 z-10 border-r border-border/70 bg-card px-3 py-3.5 align-middle transition-colors group-hover:bg-muted/50">
                   <p
-                    className="truncate font-medium text-foreground"
+                    className="break-words font-medium text-foreground"
                     data-testid={`text-equipe-${team.id}`}
                     title={team.name}
                   >
@@ -177,7 +180,7 @@ export function TeamsExecutiveTable({ teams }: TeamsExecutiveTableProps) {
             ))}
           </tbody>
         </table>
-      </div>
+      </HorizontalTableViewport>
     </div>
     {selectedTeam && (
       <TeamDossierDrawer

@@ -1,4 +1,5 @@
 import type { MentorOption } from '@workspace/api-client-react';
+import { HorizontalTableViewport } from '@/components/horizontal-table-viewport';
 
 type MentorsTableProps = {
   mentors: MentorOption[];
@@ -37,14 +38,16 @@ export function MentorsTable({ mentors }: MentorsTableProps) {
       className="max-w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
       data-testid="table-mentores"
     >
-      <div className="max-w-full touch-pan-x overflow-x-auto overscroll-x-contain">
+      <HorizontalTableViewport tableLabel="Tabela de mentores" testId="table-mentores">
         <table className="w-full min-w-[850px] table-fixed text-left text-xs text-foreground">
           <caption className="sr-only">Indicadores consolidados de desempenho dos mentores</caption>
           <thead className="bg-muted/70 text-[11px] font-semibold text-muted-foreground">
             <tr>
               {columns.map((column, index) => (
                 <th
-                  className="px-3 py-3"
+                  className={index === 0
+                    ? 'sticky left-0 z-20 border-r border-border/70 bg-muted px-3 py-3'
+                    : 'px-3 py-3'}
                   key={column}
                   scope="col"
                   style={{ width: ['20%', '19%', '18%', '10%', '12%', '10%', '11%'][index] }}
@@ -57,12 +60,12 @@ export function MentorsTable({ mentors }: MentorsTableProps) {
           <tbody className="divide-y divide-border/70">
             {mentors.map((mentor) => (
               <tr
-                className="transition-colors hover:bg-muted/50"
+                className="group transition-colors hover:bg-muted/50"
                 data-testid={`row-mentor-${mentor.id}`}
                 key={mentor.id}
               >
-                <td className="px-3 py-3.5 align-middle">
-                  <p className="truncate font-medium text-foreground" title={mentor.name}>
+                <td className="sticky left-0 z-10 border-r border-border/70 bg-card px-3 py-3.5 align-middle transition-colors group-hover:bg-muted/50">
+                  <p className="break-words font-medium text-foreground" title={mentor.name}>
                     {mentor.name}
                   </p>
                 </td>
@@ -121,7 +124,7 @@ export function MentorsTable({ mentors }: MentorsTableProps) {
             ))}
           </tbody>
         </table>
-      </div>
+      </HorizontalTableViewport>
     </div>
   );
 }
