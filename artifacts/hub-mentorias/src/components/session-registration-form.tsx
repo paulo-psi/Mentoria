@@ -26,9 +26,9 @@ export type SessionFormFields = {
 };
 
 const fieldClass =
-  'h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10';
+  'h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10';
 const areaClass =
-  'w-full resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm leading-6 text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10';
+  'w-full resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm leading-6 text-zinc-900 outline-none transition-colors placeholder:text-zinc-500 focus:border-zinc-500 focus:ring-2 focus:ring-zinc-900/10';
 
 function localToday() {
   const today = new Date();
@@ -158,7 +158,7 @@ const qualitativeFields = [
 function SectionHeading({ id, number, title, description }: { id: string; number: string; title: string; description: string }) {
   return (
     <div className="mb-5 flex items-start gap-3">
-      <span className="font-mono-ui pt-0.5 text-[10px] font-medium tracking-[0.12em] text-zinc-400">{number}</span>
+      <span className="font-mono-ui pt-0.5 text-[10px] font-medium tracking-[0.12em] text-zinc-500">{number}</span>
       <div>
         <h3 className="text-sm font-semibold text-zinc-900" id={id}>{title}</h3>
         <p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p>
@@ -449,7 +449,7 @@ function QualitativeField({
             data-testid={`field-header-${name}-${testIdSuffix}`}
           >
             <FormLabel className="text-xs font-semibold text-zinc-700">{label}</FormLabel>
-            <span className="font-mono-ui text-[10px] tabular-nums text-zinc-400">{field.value.length}/5000</span>
+            <span className="font-mono-ui text-[10px] tabular-nums text-zinc-500">{field.value.length}/5000</span>
           </div>
           <FormControl>
             <textarea

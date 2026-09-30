@@ -115,7 +115,7 @@
 
   --popover-border: 38 20% 83%;
 
-  --primary: 173 36% 34%;
+  --primary: 173 36% 32%;
 
   --primary-foreground: 42 45% 98%;
 
@@ -125,13 +125,13 @@
 
   --muted: 39 29% 91%;
 
-  --muted-foreground: 184 11% 45%;
+  --muted-foreground: 184 18% 34%;
 
   --accent: 38 67% 66%;
 
   --accent-foreground: 184 26% 17%;
 
-  --destructive: 8 57% 48%;
+  --destructive: 8 57% 46%;
 
   --destructive-foreground: 42 45% 98%;
 
@@ -280,9 +280,9 @@
 
   --accent-foreground: 42 33% 94%;
 
-  --destructive: 8 57% 58%;
+  --destructive: 8 57% 68%;
 
-  --destructive-foreground: 42 33% 94%;
+  --destructive-foreground: 184 26% 17%;
 
   /* Used as the border around inputs. Dark mode: Should be a border that is light enough to have high contrast when rendered on a --card background. More contrast than standard --border */
   --input: 184 24% 34%;

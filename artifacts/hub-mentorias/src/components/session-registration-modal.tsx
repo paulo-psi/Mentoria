@@ -84,7 +84,7 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
               </DialogDescription>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
             <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-zinc-600">Passo 4.1</span>
             <span>Registro semanal</span>
           </div>
@@ -129,7 +129,7 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
                             </option>
                           ))}
                         </select>
-                        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400" size={16} />
+                        <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} />
                       </div>
                       {principalMentorIsAvailable && (
                         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500" data-testid="status-mentor-sugerido">
@@ -158,7 +158,7 @@ export function SessionRegistrationModal({ open, onOpenChange, teams }: SessionR
 function EmptyTeamsState() {
   return (
     <div className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center" data-testid="state-sem-equipes-registro">
-      <UsersRound aria-hidden="true" className="mb-4 text-zinc-400" size={24} />
+      <UsersRound aria-hidden="true" className="mb-4 text-zinc-500" size={24} />
       <h3 className="text-sm font-semibold text-zinc-800">Nenhuma equipe disponível</h3>
       <p className="mt-2 max-w-sm text-xs leading-5 text-zinc-500">A relação de equipes precisa estar carregada antes de registrar uma mentoria.</p>
     </div>

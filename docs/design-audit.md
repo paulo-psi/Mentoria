@@ -97,3 +97,18 @@ Para quem não tem permissão de gestão, “Novo Registro” aparece desabilita
 - W3C, WCAG 2.2, critério 1.4.10 — Reflow: <https://www.w3.org/TR/WCAG22/#reflow>.
 
 Esta é uma auditoria heurística com evidência parcial; não é uma declaração de conformidade WCAG nem substitui validação com pessoas usuárias.
+
+## Atualização: validação de contraste após correção
+
+Após esta auditoria, os tokens de texto secundário, badges e estados de erro foram ajustados. Os cálculos abaixo usam a fórmula de luminância relativa WCAG e as cores já compostas nas superfícies indicadas:
+
+| Combinação final | Contraste mínimo medido | Critério |
+|---|---:|---|
+| `muted-foreground` no tema claro, sobre `muted` | 5,32:1 | Passa 4,5:1 para texto normal |
+| `muted-foreground` no tema escuro, sobre `muted` | 5,00:1 | Passa 4,5:1 para texto normal |
+| Texto e placeholders `zinc-500` nas superfícies `white` e `zinc-50` | 4,63:1 | Passa 4,5:1 para texto normal |
+| Texto de badge `primary` sobre `primary/10`, nos dois temas e superfícies | 4,62:1 | Passa 4,5:1 para texto normal |
+| Texto de alerta `destructive` sobre `destructive/5`, nos dois temas e superfícies | 4,55:1 | Passa 4,5:1 para texto normal |
+| Texto dos botões `destructive` nos temas claro e escuro | 4,95:1 | Passa 4,5:1 para texto normal |
+
+Os rótulos de status continuam apresentando texto explícito e, quando aplicável, ícones; o significado não depende apenas da cor. As mensagens de erro e status mantêm seus papéis semânticos (`alert`/`status`). Os usos de `zinc-400` em textos, placeholders e ícones de baixa ênfase foram substituídos por `zinc-500`.

@@ -82,7 +82,7 @@ export function TeamDossierDrawer({
         <SheetHeader className="shrink-0 border-b border-zinc-200 bg-white px-4 pb-5 pt-5 text-left sm:px-7 sm:pt-6">
           <div className="flex items-start justify-between gap-5">
             <div className="min-w-0 pr-2">
-              <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+              <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 <FileText aria-hidden="true" size={13} />
                 Diário de bordo
               </div>
@@ -143,7 +143,7 @@ export function TeamDossierDrawer({
               className="flex min-h-[260px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center"
               data-testid="state-vazio-sessoes"
             >
-              <ClipboardList aria-hidden="true" className="mb-4 text-zinc-400" size={24} />
+              <ClipboardList aria-hidden="true" className="mb-4 text-zinc-500" size={24} />
               <p className="max-w-sm text-sm leading-6 text-zinc-600">
                 Nenhuma mentoria registrada para esta equipe até o momento.
               </p>
@@ -196,7 +196,7 @@ function SessionRecord({ index, session }: { index: number; session: TeamSession
             {sessionTypeLabels[session.sessionType]}
           </span>
         </div>
-        <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-400">
+        <p className="mt-3 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-500">
           Registro {String(index + 1).padStart(2, '0')} · conduzido por {session.mentor.name}
         </p>
       </div>
@@ -211,7 +211,7 @@ function SessionRecord({ index, session }: { index: number; session: TeamSession
             >
               Notas da sessão
             </h3>
-            <span className="font-mono-ui text-[10px] text-zinc-400">escala 0–10</span>
+            <span className="font-mono-ui text-[10px] text-zinc-500">escala 0–10</span>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" data-testid={`grid-notas-${session.id}`}>
             {scoreLabels.map(([key, label]) => (
@@ -223,7 +223,7 @@ function SessionRecord({ index, session }: { index: number; session: TeamSession
                 <p className="text-[10px] leading-4 text-zinc-500">{label}</p>
                 <p className="mt-1 font-mono-ui text-xl font-medium tabular-nums text-zinc-900">
                   {session.scores[key]}
-                  <span className="ml-1 text-xs text-zinc-400">/10</span>
+                  <span className="ml-1 text-xs text-zinc-500">/10</span>
                 </p>
               </div>
             ))}
