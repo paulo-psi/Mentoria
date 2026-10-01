@@ -100,15 +100,34 @@ function AuthPage({ children }: { children: React.ReactNode }) {
 export function SignInPage() {
   return (
     <AuthPage>
-      <SignIn routing="path" path={`${basePath}/sign-in`} signUpUrl={`${basePath}/sign-up`} />
+      <SignIn
+        routing="path"
+        path={`${basePath}/sign-in`}
+        {...(!import.meta.env.DEV ? { signUpUrl: `${basePath}/sign-up` } : {})}
+      />
     </AuthPage>
   );
 }
 
 export function SignUpPage() {
+  if (!import.meta.env.DEV) {
+    return (
+      <AuthPage>
+        <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      </AuthPage>
+    );
+  }
+
   return (
     <AuthPage>
-      <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
+      <section className="rounded-2xl border border-border bg-card p-6 sm:p-8" aria-labelledby="titulo-cadastro-desativado" data-testid="state-cadastro-desativado">
+        <LockKeyhole className="mb-4 text-primary" size={24} aria-hidden="true" />
+        <h1 id="titulo-cadastro-desativado" className="font-display text-2xl">Cadastro temporariamente suspenso</h1>
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">Novas contas não podem ser criadas durante o período de testes. Entre com um e-mail autorizado.</p>
+        <Link className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90" href="/sign-in">
+          Entrar com conta autorizada <ArrowRight size={15} aria-hidden="true" />
+        </Link>
+      </section>
     </AuthPage>
   );
 }
@@ -140,12 +159,16 @@ export function PublicHome() {
             <Link className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90" href="/sign-in">
               Entrar <ArrowRight size={16} />
             </Link>
-            <Link className="text-sm font-semibold text-primary underline underline-offset-4" href="/sign-up">
-              Criar conta com e-mail aprovado
-            </Link>
+            {!import.meta.env.DEV && (
+              <Link className="text-sm font-semibold text-primary underline underline-offset-4" href="/sign-up">
+                Criar conta com e-mail aprovado
+              </Link>
+            )}
           </div>
           <p className="mt-5 text-xs leading-5 text-muted-foreground">
-            Criar uma conta não libera o acesso automaticamente. Seu e-mail precisa estar na lista de pessoas aprovadas.
+            {import.meta.env.DEV
+              ? 'O cadastro de novas contas está suspenso durante o período de testes. O acesso é restrito aos e-mails autorizados em Development.'
+              : 'Criar uma conta não libera o acesso automaticamente. Seu e-mail precisa estar na lista de pessoas aprovadas.'}
           </p>
         </div>
       </main>

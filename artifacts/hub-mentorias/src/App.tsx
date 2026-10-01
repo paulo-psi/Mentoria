@@ -489,9 +489,13 @@ function ClerkProviderWithRoutes() {
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
-      signUpUrl={`${basePath}/sign-up`}
+      {...(!import.meta.env.DEV
+        ? {
+            signUpUrl: `${basePath}/sign-up`,
+            signUpFallbackRedirectUrl: `${basePath}/user-portal`,
+          }
+        : {})}
       signInFallbackRedirectUrl={`${basePath}/user-portal`}
-      signUpFallbackRedirectUrl={`${basePath}/user-portal`}
       localization={ptBR}
       routerPush={(to) => setLocation(stripBase(to))}
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
