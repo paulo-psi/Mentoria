@@ -7,9 +7,12 @@
  */
 export interface RosterAuditEvent {
   id: number;
-  teamId: number;
+  /** @nullable */
+  teamId: number | null;
   /** @nullable */
   studentId: number | null;
+  /** @nullable */
+  mentorId: number | null;
   action: string;
   actorEmail: string;
   summary: string;
@@ -61,6 +64,35 @@ export interface MentorOption {
      * @minimum 0
      */
   assignedTeamsCount: number;
+}
+
+/**
+ * @nullable
+ */
+export type MentorInputMentorType = typeof MentorInputMentorType[keyof typeof MentorInputMentorType] | null;
+
+
+export const MentorInputMentorType = {
+  interno: 'interno',
+  externo: 'externo',
+} as const;
+
+export interface MentorInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     * @nullable
+     */
+  expertiseArea?: string | null;
+  /** @nullable */
+  mentorType?: MentorInputMentorType;
 }
 
 export type ServerStatusStatus = typeof ServerStatusStatus[keyof typeof ServerStatusStatus];
@@ -442,5 +474,9 @@ teamId?: number;
  * @minimum 1
  */
 studentId?: number;
+/**
+ * @minimum 1
+ */
+mentorId?: number;
 };
 

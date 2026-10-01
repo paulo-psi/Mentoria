@@ -145,7 +145,7 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   const filteredRetryCanFinish = new Promise<void>((resolve) => {
     releaseFilteredRetryResponse = resolve;
   });
-  const historyFilters: Array<{ teamId: string | null; studentId: string | null }> = [];
+  const historyFilters: Array<{ teamId: string | null; studentId: string | null; mentorId: string | null }> = [];
   const unexpectedRequests: string[] = [];
 
   await page.route('**/api/**', async (route) => {
@@ -168,33 +168,38 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
       historyRequests += 1;
       const teamId = requestUrl.searchParams.get('teamId');
       const studentId = requestUrl.searchParams.get('studentId');
-      historyFilters.push({ teamId, studentId });
-      if (teamId === null && studentId === null && holdInitialHistoryResponse) {
+      const mentorId = requestUrl.searchParams.get('mentorId');
+      historyFilters.push({ teamId, studentId, mentorId });
+      if (teamId === null && studentId === null && mentorId === null && holdInitialHistoryResponse) {
         signalInitialHistoryRequestStarted();
         await initialHistoryRequestCanFinish;
       }
       if (!retryAllowed) {
         status = 503;
         data = { error: 'History temporarily unavailable' };
-      } else if (teamId === '4' && studentId === null) {
+      } else if (teamId === '4' && studentId === null && mentorId === null) {
         data = [{
           id: 4,
           teamId: 4,
           studentId: null,
+          mentorId: null,
+          action: 'team.updated',
           summary: 'Equipe Ipê atualizada',
           createdAt: '2026-03-06T12:00:00.000Z',
           actorEmail: 'admin@example.com',
         }];
-      } else if (teamId === '7' && studentId === null) {
+      } else if (teamId === '7' && studentId === null && mentorId === null) {
         data = [{
           id: 7,
           teamId: 7,
           studentId: null,
+          mentorId: null,
+          action: 'team.updated',
           summary: 'Equipe Pinhão atualizada',
           createdAt: '2026-03-07T12:00:00.000Z',
           actorEmail: 'admin@example.com',
         }];
-      } else if (teamId === '2' && studentId === null) {
+      } else if (teamId === '2' && studentId === null && mentorId === null) {
         if (holdInitialFilteredResponse) {
           signalInitialFilteredRequestStarted();
           await initialFilteredRequestCanFinish;
@@ -205,13 +210,26 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
           isHeldFilteredRetry = true;
         }
         data = teamHistoryResponse;
-      } else if (teamId === null && studentId === null) {
+      } else if (teamId === null && studentId === null && mentorId === null) {
         data = [{
           id: 1,
           teamId: 1,
           studentId: null,
+          mentorId: null,
+          action: 'team.created',
           summary: 'Equipe Horizonte criada',
           createdAt: '2026-03-04T12:00:00.000Z',
+          actorEmail: 'admin@example.com',
+        }];
+      } else if (teamId === null && studentId === null && mentorId === '5') {
+        data = [{
+          id: 5,
+          teamId: null,
+          studentId: null,
+          mentorId: 5,
+          action: 'mentor.created',
+          summary: 'Mentor cadastrado: Mentor de Teste.',
+          createdAt: '2026-03-08T12:00:00.000Z',
           actorEmail: 'admin@example.com',
         }];
       } else {
@@ -291,6 +309,8 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
     id: 2,
     teamId: 2,
     studentId: null,
+    mentorId: null,
+    action: 'team.updated',
     summary: 'Equipe Aurora registrada',
     createdAt: '2026-03-05T12:00:00.000Z',
     actorEmail: 'admin@example.com',
@@ -338,6 +358,8 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
     id: 3,
     teamId: 2,
     studentId: null,
+    mentorId: null,
+    action: 'team.updated',
     summary: 'Equipe Aurora atualizada',
     createdAt: '2026-03-06T12:00:00.000Z',
     actorEmail: 'admin@example.com',
@@ -380,8 +402,8 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await expect(historyList).not.toContainText('Equipe Horizonte criada');
   await expect(historyList.locator('li')).toHaveCount(1);
   expect(historyFilters.slice(-2)).toEqual([
-    { teamId: '2', studentId: null },
-    { teamId: '7', studentId: null },
+    { teamId: '2', studentId: null, mentorId: null },
+    { teamId: '7', studentId: null, mentorId: null },
   ]);
   await expect(teamFilter).toHaveValue('7');
   expect(unexpectedRequests, 'the flow should use only the mocked API').toEqual([]);
@@ -416,7 +438,7 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await emptyStateRetryResponse;
   await expect(history.getByTestId('lista-historico')).toContainText('Equipe Ipê atualizada');
   await expect(history.getByTestId('historico-vazio')).toHaveCount(0);
-  expect(historyFilters.at(-1)).toEqual({ teamId: '4', studentId: null });
+  expect(historyFilters.at(-1)).toEqual({ teamId: '4', studentId: null, mentorId: null });
 
   const emptyBaselineResponse = page.waitForResponse((response) => {
     const requestUrl = new URL(response.url());
@@ -459,5 +481,5 @@ test('mobile roster history error stays readable and retry recovers', async ({ p
   await expect(history.getByTestId('historico-vazio')).not.toContainText('equipe #6');
   await expect(history.getByTestId('lista-historico')).toHaveCount(0);
   await expect(teamFilter).toHaveValue('6');
-  expect(historyFilters.at(-1)).toEqual({ teamId: '6', studentId: null });
+  expect(historyFilters.at(-1)).toEqual({ teamId: '6', studentId: null, mentorId: null });
 });

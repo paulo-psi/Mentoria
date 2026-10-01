@@ -15,4 +15,8 @@ teamId?: number;
  * @minimum 1
  */
 studentId?: number;
+/**
+ * @minimum 1
+ */
+mentorId?: number;
 };

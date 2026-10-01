@@ -5,10 +5,11 @@ import type { Team } from '@workspace/api-client-react';
 
 const fieldClass = 'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground';
 
-function describeHistoryFilters(filters: { teamId?: number; studentId?: number }) {
+function describeHistoryFilters(filters: { teamId?: number; studentId?: number; mentorId?: number }) {
   const parts = [
     ...(filters.teamId !== undefined ? [`equipe #${filters.teamId}`] : []),
     ...(filters.studentId !== undefined ? [`estudante #${filters.studentId}`] : []),
+    ...(filters.mentorId !== undefined ? [`mentor #${filters.mentorId}`] : []),
   ];
   return parts.length ? parts.join(' e ') : 'sem filtros';
 }
@@ -17,11 +18,13 @@ export function RosterHistory({ team }: { team?: Team }) {
   const queryClient = useQueryClient();
   const [teamFilter, setTeamFilter] = useState('');
   const [studentFilter, setStudentFilter] = useState('');
+  const [mentorFilter, setMentorFilter] = useState('');
   const valid = (value: string) => !value || (/^[1-9]\d*$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) <= 2147483647);
-  const filtersValid = valid(teamFilter) && valid(studentFilter);
+  const filtersValid = valid(teamFilter) && valid(studentFilter) && valid(mentorFilter);
   const filters = {
     ...(teamFilter ? { teamId: Number(teamFilter) } : {}),
     ...(studentFilter ? { studentId: Number(studentFilter) } : {}),
+    ...(mentorFilter ? { mentorId: Number(mentorFilter) } : {}),
   };
   const history = useGetRosterAudit(filters, {
     query: { queryKey: getGetRosterAuditQueryKey(filters), enabled: filtersValid, staleTime: 0, refetchOnMount: 'always' },
@@ -39,9 +42,10 @@ export function RosterHistory({ team }: { team?: Team }) {
       filters: {
         ...(teamFilter ? { teamId: Number(teamFilter) } : {}),
         ...(studentFilter ? { studentId: Number(studentFilter) } : {}),
+          ...(mentorFilter ? { mentorId: Number(mentorFilter) } : {}),
       },
     });
-  }, [filtersValid, history.data, teamFilter, studentFilter]);
+  }, [filtersValid, history.data, teamFilter, studentFilter, mentorFilter]);
 
   const visibleHistory = history.data === undefined
     ? lastSuccessfulHistory
@@ -56,7 +60,7 @@ export function RosterHistory({ team }: { team?: Team }) {
       <span className="sr-only" aria-live="polite" aria-atomic="true" data-testid="historico-announcement">
         {historyAnnouncement}
       </span>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">Até 100 registros recentes. Filtre por ID para consultar também equipes ou estudantes já excluídos. Nomes de estudantes não são guardados aqui.</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">Até 100 registros recentes. Filtre por ID para consultar equipes, estudantes ou mentores.</p>
       <div className="mt-5 flex flex-wrap items-end gap-3">
         <label className="w-36 text-xs font-semibold">ID da equipe
           <input type="number" min="1" step="1" className={`${fieldClass} mt-1`} value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} data-testid="filtro-historico-equipe" />
@@ -64,8 +68,11 @@ export function RosterHistory({ team }: { team?: Team }) {
         <label className="w-36 text-xs font-semibold">ID do estudante
           <input type="number" min="1" step="1" className={`${fieldClass} mt-1`} value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} data-testid="filtro-historico-estudante" />
         </label>
-        {team && <button type="button" className="min-h-10 rounded-lg border border-border px-3 text-xs font-semibold" onClick={() => { setTeamFilter(String(team.id)); setStudentFilter(''); }}>Histórico da equipe selecionada</button>}
-        <button type="button" className="min-h-10 rounded-lg border border-border px-3 text-xs font-semibold" onClick={() => { setTeamFilter(''); setStudentFilter(''); }}>Ver todos</button>
+        <label className="w-36 text-xs font-semibold">ID do mentor
+          <input type="number" min="1" step="1" className={`${fieldClass} mt-1`} value={mentorFilter} onChange={(event) => setMentorFilter(event.target.value)} data-testid="filtro-historico-mentor" />
+        </label>
+        {team && <button type="button" className="min-h-10 rounded-lg border border-border px-3 text-xs font-semibold" onClick={() => { setTeamFilter(String(team.id)); setStudentFilter(''); setMentorFilter(''); }}>Histórico da equipe selecionada</button>}
+        <button type="button" className="min-h-10 rounded-lg border border-border px-3 text-xs font-semibold" onClick={() => { setTeamFilter(''); setStudentFilter(''); setMentorFilter(''); }}>Ver todos</button>
       </div>
       {team && team.students.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Estudante:</span>
@@ -91,7 +98,7 @@ export function RosterHistory({ team }: { team?: Team }) {
           {visibleHistory.data.map((event) => <li key={event.id} className="py-3 text-xs leading-5">
             <div className="font-semibold">{event.summary}</div>
             <div className="mt-1 break-words text-muted-foreground">
-              Equipe #{event.teamId}{event.studentId !== null ? ` · Estudante #${event.studentId}` : ''} · {new Date(event.createdAt).toLocaleString('pt-BR')} · {event.actorEmail}
+              {[event.teamId !== null ? `Equipe #${event.teamId}` : null, event.studentId !== null ? `Estudante #${event.studentId}` : null, event.mentorId !== null ? `Mentor #${event.mentorId}` : null].filter(Boolean).join(' · ') || 'Registro geral'} · {new Date(event.createdAt).toLocaleString('pt-BR')} · {event.actorEmail}
             </div>
           </li>)}
         </ol> : visibleHistory ? <p className="mt-5 text-xs text-muted-foreground" data-testid="historico-vazio">

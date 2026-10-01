@@ -8,9 +8,12 @@
 
 export interface RosterAuditEvent {
   id: number;
-  teamId: number;
+  /** @nullable */
+  teamId: number | null;
   /** @nullable */
   studentId: number | null;
+  /** @nullable */
+  mentorId: number | null;
   action: string;
   actorEmail: string;
   summary: string;

@@ -18,6 +18,8 @@ export * from './mentoringSession';
 export * from './mentoringSessionInput';
 export * from './mentoringSessionInputSessionType';
 export * from './mentoringSessionSessionType';
+export * from './mentorInput';
+export * from './mentorInputMentorType';
 export * from './mentorMentorType';
 export * from './mentorOption';
 export * from './mentorOptionMentorType';

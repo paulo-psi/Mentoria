@@ -33,6 +33,9 @@ paths:
         - name: studentId
           in: query
           schema: { type: integer, minimum: 1 }
+        - name: mentorId
+          in: query
+          schema: { type: integer, minimum: 1 }
       responses:
         "200":
           description: Most recent 100 changes
@@ -456,6 +459,40 @@ paths:
           description: Sign in required
         "403":
           description: Approved access required
+    post:
+      operationId: createMentor
+      tags: [mentors]
+      summary: Register a mentor
+      description: Administrator-only. New mentors are added to the roster and recorded in its audit history.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MentorInput"
+      responses:
+        "201":
+          description: Mentor registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MentorOption"
+        "400":
+          description: Invalid mentor data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Sign in required
+        "403":
+          description: Administrator access required
+        "409":
+          description: A mentor with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /access:
     get:
       operationId: getAccessPermissions
@@ -478,13 +515,14 @@ components:
       type: object
       properties:
         id: { type: integer }
-        teamId: { type: integer }
+        teamId: { type: ["integer", "null"] }
         studentId: { type: ["integer", "null"] }
+        mentorId: { type: ["integer", "null"] }
         action: { type: string }
         actorEmail: { type: string }
         summary: { type: string }
         createdAt: { type: string, format: date-time }
-      required: [id, teamId, studentId, action, actorEmail, summary, createdAt]
+      required: [id, teamId, studentId, mentorId, action, actorEmail, summary, createdAt]
     ErrorResponse:
       type: object
       properties:
@@ -534,6 +572,24 @@ components:
         - totalSessions
         - avgNpsReceived
         - assignedTeamsCount
+    MentorInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        email:
+          type: ["string", "null"]
+          format: email
+        expertiseArea:
+          type: ["string", "null"]
+          minLength: 1
+          maxLength: 120
+        mentorType:
+          type: ["string", "null"]
+          enum: [interno, externo, null]
+      required: [name]
     ServerStatus:
       type: object
       properties:

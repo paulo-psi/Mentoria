@@ -15,15 +15,18 @@ import * as zod from 'zod';
 
 
 
+
 export const GetRosterAuditQueryParams = zod.object({
   "teamId": zod.coerce.number().int().min(1).optional(),
-  "studentId": zod.coerce.number().int().min(1).optional()
+  "studentId": zod.coerce.number().int().min(1).optional(),
+  "mentorId": zod.coerce.number().int().min(1).optional()
 })
 
 export const GetRosterAuditResponseItem = zod.object({
   "id": zod.number().int(),
-  "teamId": zod.number().int(),
+  "teamId": zod.number().int().nullable(),
   "studentId": zod.number().int().nullable(),
+  "mentorId": zod.number().int().nullable(),
   "action": zod.string(),
   "actorEmail": zod.string(),
   "summary": zod.string(),
@@ -515,6 +518,44 @@ export const GetMentorsResponseItem = zod.object({
   "assignedTeamsCount": zod.number().int().min(getMentorsResponseAssignedTeamsCountMin).describe('Number of distinct teams mentored.')
 })
 export const GetMentorsResponse = zod.array(GetMentorsResponseItem)
+
+
+/**
+ * Administrator-only. New mentors are added to the roster and recorded in its audit history.
+ * @summary Register a mentor
+ */
+export const createMentorBodyNameMax = 120;
+
+export const createMentorBodyExpertiseAreaMax = 120;
+
+
+
+export const CreateMentorBody = zod.object({
+  "name": zod.string().min(1).max(createMentorBodyNameMax),
+  "email": zod.string().email().nullish(),
+  "expertiseArea": zod.string().min(1).max(createMentorBodyExpertiseAreaMax).nullish(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullish()
+})
+
+export const createMentorResponseTotalSessionsMin = 0;
+
+export const createMentorResponseAvgNpsReceivedMin = 0;
+export const createMentorResponseAvgNpsReceivedMax = 10;
+
+export const createMentorResponseAssignedTeamsCountMin = 0;
+
+
+
+export const CreateMentorResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "email": zod.string().email().nullable(),
+  "expertiseArea": zod.string().nullable(),
+  "mentorType": zod.union([zod.literal('interno'),zod.literal('externo'),zod.literal(null)]).nullable(),
+  "totalSessions": zod.number().int().min(createMentorResponseTotalSessionsMin).describe('Total mentoring sessions conducted by this mentor.'),
+  "avgNpsReceived": zod.number().min(createMentorResponseAvgNpsReceivedMin).max(createMentorResponseAvgNpsReceivedMax).nullable().describe('Mean team NPS for this mentor, or null when there are no sessions.'),
+  "assignedTeamsCount": zod.number().int().min(createMentorResponseAssignedTeamsCountMin).describe('Number of distinct teams mentored.')
+})
 
 
 /**

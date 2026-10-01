@@ -8,6 +8,7 @@ import {
   getGetMentorsQueryKey,
   getGetRosterAuditQueryKey,
   getGetTeamsQueryKey,
+  useCreateMentor,
   useCreateStudent,
   useCreateTeam,
   useDeleteStudent,
@@ -27,6 +28,7 @@ import { SessionRegistration } from './manage-sessions';
 type TeamFields = { name: string; mainMentorId: string };
 type TeamBaseline = { name: string; mainMentorId: number };
 type NameFields = { name: string };
+type MentorFields = { name: string; email: string; expertiseArea: string; mentorType: '' | 'interno' | 'externo' };
 const inputClass = 'h-11 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15';
 const secondaryButton = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButton = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50';
@@ -88,14 +90,14 @@ export default function ManagePage() {
         <div className="mb-8 border-b border-border pb-7">
            <div className="mb-2 font-mono-ui text-[10px] uppercase tracking-[0.17em] text-muted-foreground">PIBEP 2026 · 16ª edição / administração</div>
           <h1 className="font-display text-[36px] leading-tight tracking-[-0.04em] sm:text-[44px]">Conferência das equipes</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Atualize a relação oficial com atenção. Alterações salvas aparecem também na consulta das equipes.</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Cadastre mentores, equipes, estudantes e sessões. Esta permissão altera dados do HUB, não o código do projeto.</p>
         </div>
         {access.isLoading ? (
           <div className="space-y-4" data-testid="loading-permissoes"><div className="h-5 w-48 animate-pulse rounded bg-muted" /><div className="h-56 animate-pulse rounded-2xl bg-muted" /></div>
         ) : access.isError ? (
           <AccessNotice title="Não foi possível conferir seu acesso." description="A manutenção não está disponível enquanto a permissão não puder ser verificada." onRetry={() => void access.refetch()} />
         ) : !access.data?.canManage ? (
-           <AccessNotice title="Manutenção restrita" description="Somente administradores designados podem alterar equipes ou estudantes." />
+           <AccessNotice title="Manutenção restrita" description="Somente administradores designados podem cadastrar e alterar dados do HUB." />
         ) : (
           <ManageWorkspace />
         )}
@@ -121,6 +123,7 @@ function ManageWorkspace() {
   const mentors = useGetMentors({ query: { queryKey: getGetMentorsQueryKey(), staleTime: 0, refetchOnMount: 'always' } });
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const [creatingMentor, setCreatingMentor] = useState(false);
   const [notice, setNotice] = useState('');
   const selected = teams.data?.find((team) => team.id === selectedId);
   const refresh = () => { void teams.refetch(); void mentors.refetch(); };
@@ -137,13 +140,32 @@ function ManageWorkspace() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl tracking-[-0.035em]">Relação em manutenção</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{teams.data ? `${teams.data.length} equipes registradas` : 'Carregando a relação…'}</p>
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="text-contagem-cadastro">{teams.data ? `${teams.data.length} equipes registradas · ${mentors.data?.length ?? 0} mentores` : 'Carregando a relação…'}</p>
         </div>
-        <button type="button" className={primaryButton} data-testid="button-nova-equipe" onClick={() => { setCreating(true); setSelectedId(null); setNotice(''); }}>
-          <Plus size={16} /> Nova equipe
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={secondaryButton} data-testid="button-novo-mentor" onClick={() => { setCreatingMentor(true); setCreating(false); setNotice(''); }}>
+            <Plus size={16} /> Cadastrar mentor
+          </button>
+          <button type="button" className={primaryButton} data-testid="button-nova-equipe" onClick={() => { setCreating(true); setCreatingMentor(false); setSelectedId(null); setNotice(''); }}>
+            <Plus size={16} /> Nova equipe
+          </button>
+        </div>
       </div>
       {notice && <div role="status" data-testid="status-alteracao" className="mb-5 rounded-lg border border-primary/20 bg-primary/10 px-4 py-3 text-xs font-semibold text-primary">{notice}</div>}
+      {creatingMentor && <MentorRegistrationPanel
+        onCancel={() => setCreatingMentor(false)}
+        onRefresh={refresh}
+        onSaved={async (mentor) => {
+          await queryClient.cancelQueries({ queryKey: getGetMentorsQueryKey() });
+          queryClient.setQueryData<MentorOption[]>(getGetMentorsQueryKey(), (current) =>
+            [...(current ?? []).filter((item) => item.id !== mentor.id), mentor].sort((a, b) => a.name.localeCompare(b.name)),
+          );
+          void queryClient.invalidateQueries({ queryKey: getGetMentorsQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetRosterAuditQueryKey() });
+          setCreatingMentor(false);
+          setNotice('Mentor cadastrado e disponível para equipes e sessões.');
+        }}
+      />}
       {teams.isError && teams.data && <div role="alert" data-testid="status-leitura-desatualizada" className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-600/25 bg-amber-100/50 px-4 py-3 text-xs text-foreground">
         <span>A atualização da leitura falhou. Os dados salvos estão visíveis, mas a relação pode estar desatualizada.</span>
         <button type="button" className={secondaryButton} onClick={refresh} data-testid="button-atualizar-leitura"><RefreshCw size={14} /> Atualizar relação</button>
@@ -188,6 +210,96 @@ function ManageWorkspace() {
       )}
       <RosterHistory team={selected} />
     </div>
+  );
+}
+
+function MentorRegistrationPanel({
+  onSaved,
+  onCancel,
+  onRefresh,
+}: {
+  onSaved: (mentor: MentorOption) => Promise<void>;
+  onCancel: () => void;
+  onRefresh: () => void;
+}) {
+  const create = useCreateMentor();
+  const form = useForm<MentorFields>({
+    defaultValues: { name: '', email: '', expertiseArea: '', mentorType: '' },
+  });
+  const [error, setError] = useState<unknown>(null);
+
+  return (
+    <section className="mb-5 rounded-2xl border border-border bg-card p-5 sm:p-7" aria-labelledby="titulo-cadastro-mentor" data-testid="painel-cadastro-mentor">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="titulo-cadastro-mentor" className="font-display text-xl">Cadastrar mentor</h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">O mentor ficará disponível para associação a equipes e para registros de sessão. O e-mail, quando informado, precisa ser único.</p>
+        </div>
+        <button type="button" className={secondaryButton} onClick={onCancel} data-testid="button-cancelar-mentor">Cancelar</button>
+      </div>
+      <Form {...form}>
+        <form className="space-y-5" onSubmit={form.handleSubmit(async (values) => {
+          setError(null);
+          try {
+            const mentor = await create.mutateAsync({
+              data: {
+                name: values.name.trim(),
+                email: values.email.trim() || null,
+                expertiseArea: values.expertiseArea.trim() || null,
+                mentorType: values.mentorType || null,
+              },
+            });
+            await onSaved(mentor);
+          } catch (cause) {
+            setError(cause);
+          }
+        })}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField control={form.control} name="name" rules={{ validate: (value) => value.trim().length > 0 && value.trim().length <= 120 || 'Informe um nome de até 120 caracteres.' }} render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="mentor-name" className="text-xs font-semibold">Nome do mentor</FormLabel>
+                <FormControl><input {...field} id="mentor-name" className={inputClass} maxLength={120} autoComplete="name" data-testid="input-nome-mentor" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="email" rules={{ validate: (value) => !value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) || 'Informe um e-mail válido.' }} render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="mentor-email" className="text-xs font-semibold">E-mail (opcional)</FormLabel>
+                <FormControl><input {...field} id="mentor-email" type="email" className={inputClass} maxLength={254} autoComplete="email" data-testid="input-email-mentor" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="expertiseArea" rules={{ validate: (value) => value.trim().length <= 120 || 'Use até 120 caracteres.' }} render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="mentor-expertise" className="text-xs font-semibold">Especialidade (opcional)</FormLabel>
+                <FormControl><input {...field} id="mentor-expertise" className={inputClass} maxLength={120} data-testid="input-especialidade-mentor" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="mentorType" render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="mentor-type" className="text-xs font-semibold">Tipo de mentor</FormLabel>
+                <FormControl>
+                  <select {...field} id="mentor-type" className={inputClass} data-testid="select-tipo-mentor">
+                    <option value="">Não informado</option>
+                    <option value="interno">Interno</option>
+                    <option value="externo">Externo</option>
+                  </select>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </div>
+          <MutationError error={error} onRefresh={onRefresh} testId="erro-salvar-mentor" />
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className={primaryButton} disabled={create.isPending} data-testid="button-salvar-mentor">
+              {create.isPending ? 'Salvando…' : 'Salvar mentor'}
+            </button>
+            <button type="button" className={secondaryButton} disabled={create.isPending} onClick={onCancel}>Cancelar</button>
+          </div>
+        </form>
+      </Form>
+    </section>
   );
 }
 

@@ -35,6 +35,12 @@ async function mockRosterApi(
     latestAgreedNextSteps: null,
   };
   const createdNames: string[] = [];
+  const createdMentors: Array<{
+    name: string;
+    email: string | null;
+    expertiseArea: string | null;
+    mentorType: 'interno' | 'externo' | null;
+  }> = [];
   const sessionRequests: Array<Record<string, unknown>> = [];
   const renameRequests: Array<{ name: string; expectedName: string }> = [];
   const mutationRequests: string[] = [];
@@ -95,8 +101,39 @@ async function mockRosterApi(
       }
     }
     else if (method === 'GET' && pathname === '/api/mentors') data = mentors;
+    else if (canManage && method === 'POST' && pathname === '/api/mentors') {
+      const body = route.request().postDataJSON() as {
+        name: string;
+        email: string | null;
+        expertiseArea: string | null;
+        mentorType: 'interno' | 'externo' | null;
+      };
+      createdMentors.push(body);
+      const mentor: MentorOption = {
+        id: 3,
+        ...body,
+        totalSessions: 0,
+        avgNpsReceived: null,
+        assignedTeamsCount: 0,
+      };
+      mentors.push(mentor);
+      status = 201;
+      data = mentor;
+    }
     else if (method === 'GET' && pathname === '/api/teams/1/sessions') data = [];
-    else if (method === 'GET' && pathname === '/api/roster-audit') data = [];
+    else if (method === 'GET' && pathname === '/api/roster-audit') {
+      const mentorId = new URL(route.request().url()).searchParams.get('mentorId');
+      data = mentorId === '3' ? [{
+        id: 3,
+        teamId: null,
+        studentId: null,
+        mentorId: 3,
+        action: 'mentor.created',
+        actorEmail: 'admin@example.com',
+        summary: 'Mentor cadastrado: Mentora de Empreendedorismo.',
+        createdAt: '2026-03-08T12:00:00.000Z',
+      }] : [];
+    }
     else if (canManage && method === 'POST' && pathname === '/api/teams/1/sessions') {
       const body = route.request().postDataJSON() as {
         sessionDate: string;
@@ -146,6 +183,7 @@ async function mockRosterApi(
 
   return {
     createdNames,
+    createdMentors,
     sessionRequests,
     renameRequests,
     mutationRequests,
@@ -331,6 +369,47 @@ test('test manager signs in, adds a student and sees the saved roster after relo
   await page.getByTestId('button-selecionar-equipe-1').click();
   await expect(page.getByTestId('text-estudante-2')).toHaveText('Marina Costa');
   expect(api.unexpectedRequests, 'all data must stay within the mocked API').toEqual([]);
+});
+
+test('administrator registers a mentor and sees it in the roster after reload', async ({ page }) => {
+  const api = await mockRosterApi(page);
+
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Entrar', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar como pessoa de teste' }).click();
+  await expect(page).toHaveURL(/\/user-portal$/);
+  await page.getByTestId('link-manter-equipes').click();
+  await expect(page).toHaveURL(/\/manage$/);
+
+  await page.getByTestId('button-novo-mentor').click();
+  await page.getByTestId('input-nome-mentor').fill('Mentora de Empreendedorismo');
+  await page.getByTestId('input-email-mentor').fill('mentora@example.org');
+  await page.getByTestId('input-especialidade-mentor').fill('Inovação');
+  await page.getByTestId('select-tipo-mentor').selectOption('externo');
+  await page.getByTestId('button-salvar-mentor').click();
+
+  await expect(page.getByTestId('status-alteracao')).toContainText('Mentor cadastrado');
+  expect(api.createdMentors).toEqual([{
+    name: 'Mentora de Empreendedorismo',
+    email: 'mentora@example.org',
+    expertiseArea: 'Inovação',
+    mentorType: 'externo',
+  }]);
+
+  const mentorHistoryResponse = page.waitForResponse((response) => {
+    const requestUrl = new URL(response.url());
+    return requestUrl.pathname === '/api/roster-audit' &&
+      requestUrl.searchParams.get('mentorId') === '3' &&
+      response.status() === 200;
+  });
+  await page.getByTestId('filtro-historico-mentor').fill('3');
+  await mentorHistoryResponse;
+  await expect(page.getByTestId('lista-historico')).toContainText('Mentor cadastrado: Mentora de Empreendedorismo.');
+  await expect(page.getByTestId('lista-historico')).toContainText('Mentor #3');
+
+  await page.reload();
+  await expect(page.getByTestId('text-contagem-cadastro')).toContainText('3 mentores');
+  expect(api.unexpectedRequests).toEqual([]);
 });
 
 test('administrator records a transversal session with another mentor', async ({ page }) => {

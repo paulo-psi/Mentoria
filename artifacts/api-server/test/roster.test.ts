@@ -45,7 +45,7 @@ import
 import 
 {
 
-  db, pool, mentorsTable, mentoringSessionsTable, studentsTable, teamsTable,
+  db, pool, mentorsTable, mentoringSessionsTable, rosterAuditTable, studentsTable, teamsTable,
 }
  from "@workspace/db"
 ;
@@ -70,6 +70,9 @@ import dashboardRoutes from "../src/routes/dashboard"
 ;
 
 import accessRoutes from "../src/routes/access"
+;
+
+import rosterAuditRoutes from "../src/routes/roster-audit"
 ;
 
 import 
@@ -179,7 +182,7 @@ async function start({ seed = true }: { seed?: boolean } = {}) {
 )
 ;
 
-  app.use("/api", healthRoutes, listRoutes, teamRoutes, dashboardRoutes, studentRoutes, accessRoutes)
+  app.use("/api", healthRoutes, listRoutes, teamRoutes, dashboardRoutes, studentRoutes, accessRoutes, rosterAuditRoutes)
 ;
 
   server = app.listen(0)
@@ -483,6 +486,9 @@ function rosterProjection(rows: Team[])
 
 async function clearRosterTables() 
 {
+
+  await db.delete(rosterAuditTable)
+;
 
   await db.delete(mentoringSessionsTable)
 ;
@@ -2638,6 +2644,77 @@ test("mentor list requires approved access and aggregates sessions per mentor", 
     assert.equal(noSessions.totalSessions, 0);
     assert.equal(noSessions.avgNpsReceived, null);
     assert.equal(noSessions.assignedTeamsCount, 0);
+  } finally {
+    await stop();
+    await clearRosterTables();
+  }
+});
+
+test("mentor creation is administrator-only and records searchable audit history", async () => {
+  await clearRosterTables();
+  try {
+    await start({ seed: false });
+
+    assert.equal((await request("POST", "/mentors", { name: "Mentor de teste" })).status, 401);
+    assert.equal((await request("POST", "/mentors", { name: "Mentor de teste" }, "reader")).status, 403);
+    assert.equal((await request("POST", "/mentors", { name: "Mentor de teste" }, "other")).status, 403);
+    assert.equal((await request("POST", "/mentors", { name: "   " }, "admin")).status, 400);
+    assert.equal((await request("POST", "/mentors", { name: "Mentor", mentorType: "invalid" }, "admin")).status, 400);
+
+    const response = await request("POST", "/mentors", {
+      name: "Mentora de Empreendedorismo",
+      email: "mentora@example.org",
+      expertiseArea: "Inovação",
+      mentorType: "externo",
+    }, "admin");
+    assert.equal(response.status, 201);
+    const mentor = response.body as {
+      id: number;
+      name: string;
+      email: string | null;
+      expertiseArea: string | null;
+      mentorType: string | null;
+      totalSessions: number;
+      avgNpsReceived: number | null;
+      assignedTeamsCount: number;
+    };
+    assert.equal(mentor.name, "Mentora de Empreendedorismo");
+    assert.equal(mentor.email, "mentora@example.org");
+    assert.equal(mentor.expertiseArea, "Inovação");
+    assert.equal(mentor.mentorType, "externo");
+    assert.equal(mentor.totalSessions, 0);
+    assert.equal(mentor.avgNpsReceived, null);
+    assert.equal(mentor.assignedTeamsCount, 0);
+
+    const duplicateEmail = await request("POST", "/mentors", {
+      name: "Outra mentora",
+      email: "mentora@example.org",
+    }, "admin");
+    assert.equal(duplicateEmail.status, 409);
+
+    const history = await request("GET", "/roster-audit", undefined, "admin");
+    assert.equal(history.status, 200);
+    const events = history.body as Array<{
+      teamId: number | null;
+      studentId: number | null;
+      mentorId: number | null;
+      action: string;
+      actorEmail: string;
+      summary: string;
+    }>;
+    assert.equal(events.length, 1);
+    assert.equal(events[0].teamId, null);
+    assert.equal(events[0].studentId, null);
+    assert.equal(events[0].mentorId, mentor.id);
+    assert.equal(events[0].action, "mentor.created");
+    assert.equal(events[0].actorEmail, ADMIN);
+    assert.equal(events[0].summary, "Mentor cadastrado: Mentora de Empreendedorismo.");
+
+    const mentorHistory = await request("GET", `/roster-audit?mentorId=${mentor.id}`, undefined, "admin");
+    assert.equal(mentorHistory.status, 200);
+    assert.equal((mentorHistory.body as Array<{ mentorId: number }>)[0]?.mentorId, mentor.id);
+    assert.deepEqual((await request("GET", "/roster-audit?teamId=1", undefined, "admin")).body, []);
+    assert.equal((await request("GET", "/roster-audit?mentorId=invalid", undefined, "admin")).status, 400);
   } finally {
     await stop();
     await clearRosterTables();

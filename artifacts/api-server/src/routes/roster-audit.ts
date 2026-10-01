@@ -16,7 +16,8 @@ function parseId(value: unknown): number | undefined | null {
 router.get("/roster-audit", requireApprovedUser, requireAdministrator, async (req, res): Promise<void> => {
   const teamId = parseId(req.query.teamId);
   const studentId = parseId(req.query.studentId);
-  if (teamId === null || studentId === null) {
+  const mentorId = parseId(req.query.mentorId);
+  if (teamId === null || studentId === null || mentorId === null) {
     res.status(400).json({ error: "Informe IDs positivos para filtrar o histórico." });
     return;
   }
@@ -24,6 +25,7 @@ router.get("/roster-audit", requireApprovedUser, requireAdministrator, async (re
     .where(and(
       teamId === undefined ? undefined : eq(rosterAuditTable.teamId, teamId),
       studentId === undefined ? undefined : eq(rosterAuditTable.studentId, studentId),
+      mentorId === undefined ? undefined : eq(rosterAuditTable.mentorId, mentorId),
     ))
     .orderBy(desc(rosterAuditTable.id)).limit(100);
   res.json(GetRosterAuditResponse.parse(rows));
