@@ -123,8 +123,8 @@ export function SignUpPage() {
       <section className="rounded-2xl border border-border bg-card p-6 sm:p-8" aria-labelledby="titulo-cadastro-desativado" data-testid="state-cadastro-desativado">
         <LockKeyhole className="mb-4 text-primary" size={24} aria-hidden="true" />
         <h1 id="titulo-cadastro-desativado" className="font-display text-2xl">Cadastro temporariamente suspenso</h1>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">Novas contas não podem ser criadas durante o período de testes. Entre com um e-mail autorizado.</p>
-        <Link className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90" href="/sign-in">
+        <p className="mt-3 text-sm leading-6 text-muted-foreground">O cadastro pelo HUB está suspenso durante o período de testes. Entre com um e-mail autorizado.</p>
+        <Link className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="/sign-in">
           Entrar com conta autorizada <ArrowRight size={15} aria-hidden="true" />
         </Link>
       </section>
@@ -167,7 +167,7 @@ export function PublicHome() {
           </div>
           <p className="mt-5 text-xs leading-5 text-muted-foreground">
             {import.meta.env.DEV
-              ? 'O cadastro de novas contas está suspenso durante o período de testes. O acesso é restrito aos e-mails autorizados em Development.'
+              ? 'O cadastro pelo HUB está suspenso durante o período de testes. O acesso é restrito aos e-mails autorizados em Development.'
               : 'Criar uma conta não libera o acesso automaticamente. Seu e-mail precisa estar na lista de pessoas aprovadas.'}
           </p>
         </div>

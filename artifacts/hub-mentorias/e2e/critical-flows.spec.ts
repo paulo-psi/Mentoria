@@ -246,6 +246,25 @@ test('signed-out visitor reaches sign-in but not the private roster', async ({ p
   expect(apiCalls, 'private API should not load before sign-in').toEqual([]);
 });
 
+test('new account registration is disabled during the Development test period', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('link', { name: /Criar conta/i })).toHaveCount(0);
+  await expect(page.getByText(/cadastro pelo HUB está suspenso/i)).toBeVisible();
+
+  await page.goto('/sign-up');
+  await expect(page.getByTestId('state-cadastro-desativado')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Cadastro temporariamente suspenso' })).toBeVisible();
+
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  const signInLink = page.getByRole('link', { name: 'Entrar com conta autorizada' });
+  await expect(signInLink).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page.getByTestId('browser-test-sign-in')).toBeVisible();
+});
+
 test('signed-in view-only user can see the roster but cannot open maintenance', async ({ page }) => {
   const api = await mockRosterApi(page, false);
 
