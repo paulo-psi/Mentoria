@@ -246,8 +246,16 @@ test('signed-out visitor reaches sign-in but not the private roster', async ({ p
   expect(apiCalls, 'private API should not load before sign-in').toEqual([]);
 });
 
-test('new account registration is disabled during the Development test period', async ({ page }) => {
+test('Development sign-up follows the temporary registration override', async ({ page }) => {
   await page.goto('/');
+
+  if (process.env.VITE_HUB_TEMP_SIGNUP_ENABLED === 'true') {
+    await expect(page.getByRole('link', { name: /Criar conta/i })).toBeVisible();
+    await expect(page.getByText(/Criar uma conta não libera o acesso automaticamente/i)).toBeVisible();
+    await page.goto('/sign-up');
+    await expect(page.getByTestId('state-cadastro-desativado')).toHaveCount(0);
+    return;
+  }
 
   await expect(page.getByRole('link', { name: /Criar conta/i })).toHaveCount(0);
   await expect(page.getByText(/cadastro pelo HUB está suspenso/i)).toBeVisible();

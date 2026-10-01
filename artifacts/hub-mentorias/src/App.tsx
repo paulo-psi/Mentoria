@@ -49,6 +49,7 @@ import {
   PublicHome,
   SignInPage,
   SignUpPage,
+  signUpEnabled,
   stripBase,
   UserProfileButton,
 } from './auth';
@@ -489,7 +490,7 @@ function ClerkProviderWithRoutes() {
       proxyUrl={clerkProxyUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
-      {...(!import.meta.env.DEV
+      {...(signUpEnabled
         ? {
             signUpUrl: `${basePath}/sign-up`,
             signUpFallbackRedirectUrl: `${basePath}/user-portal`,

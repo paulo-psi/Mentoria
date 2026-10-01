@@ -15,6 +15,11 @@ export const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 
 export const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 
+const temporaryDevelopmentSignUpEnabled =
+  (import.meta.env as unknown as { VITE_HUB_TEMP_SIGNUP_ENABLED?: string })
+    .VITE_HUB_TEMP_SIGNUP_ENABLED === 'true';
+export const signUpEnabled = !import.meta.env.DEV || temporaryDevelopmentSignUpEnabled;
+
 export function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
     ? path.slice(basePath.length) || '/'
@@ -103,14 +108,14 @@ export function SignInPage() {
       <SignIn
         routing="path"
         path={`${basePath}/sign-in`}
-        {...(!import.meta.env.DEV ? { signUpUrl: `${basePath}/sign-up` } : {})}
+        {...(signUpEnabled ? { signUpUrl: `${basePath}/sign-up` } : {})}
       />
     </AuthPage>
   );
 }
 
 export function SignUpPage() {
-  if (!import.meta.env.DEV) {
+  if (signUpEnabled) {
     return (
       <AuthPage>
         <SignUp routing="path" path={`${basePath}/sign-up`} signInUrl={`${basePath}/sign-in`} />
@@ -159,14 +164,14 @@ export function PublicHome() {
             <Link className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90" href="/sign-in">
               Entrar <ArrowRight size={16} />
             </Link>
-            {!import.meta.env.DEV && (
+            {signUpEnabled && (
               <Link className="text-sm font-semibold text-primary underline underline-offset-4" href="/sign-up">
                 Criar conta com e-mail aprovado
               </Link>
             )}
           </div>
           <p className="mt-5 text-xs leading-5 text-muted-foreground">
-            {import.meta.env.DEV
+            {!signUpEnabled
               ? 'O cadastro pelo HUB está suspenso durante o período de testes. O acesso é restrito aos e-mails autorizados em Development.'
               : 'Criar uma conta não libera o acesso automaticamente. Seu e-mail precisa estar na lista de pessoas aprovadas.'}
           </p>

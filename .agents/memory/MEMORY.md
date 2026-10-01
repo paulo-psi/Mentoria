@@ -17,3 +17,4 @@
 - [Mobile error-state E2E retries](playwright-mobile-error-retries.md) — failed React Query retries can temporarily unmount notices and delay settled-error assertions.
 - [Delayed query response E2E](playwright-delayed-query-responses.md) — filter changes may abort old fetches; synchronize on the mocked route release, not a browser response event.
 - [React Query live announcements](react-query-live-announcements.md) — announce query completion only after a post-mount fetch, not from cached data shown before its refresh.
+- [Managed Clerk sign-up limits](managed-clerk-signup.md) — the Auth pane manages existing users; hiding app sign-up does not globally disable Clerk identity creation.

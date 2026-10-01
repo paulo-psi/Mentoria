@@ -28,6 +28,7 @@ channel = "stable-25_05"
 
 [userenv.development]
 HUB_ADMIN_EMAILS = "paulocpmar@gmail.com,paulo.porto@pucpr.br"
+VITE_HUB_TEMP_SIGNUP_ENABLED = "true"
 
 [userenv.production]
 HUB_ADMIN_EMAILS = "paulocpmar@gmail.com"
